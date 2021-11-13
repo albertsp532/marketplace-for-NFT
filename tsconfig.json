@@ -1,0 +1,27 @@
+﻿{
+	"compilerOptions": {
+		"lib": [
+			"ES2015"
+		],
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"sourceMap": true,
+		"target": "es6",
+		"noImplicitAny": false,
+		"suppressImplicitAnyIndexErrors": true,
+		"typeRoots": [
+			"node_modules/@types"
+		],
+		"pretty": true,
+		"allowSyntheticDefaultImports": true,
+		"declaration": false,
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true
+	},
+	"include": [
+		"scripts/**/*.ts"
+	],
+	"exclude": [
+		"node_modules"
+	]
+}
