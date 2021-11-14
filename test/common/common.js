@@ -1,22 +1,19 @@
-require('babel-register');
-require('babel-polyfill');
 
 const moment = require('moment');
 
 export function accounts(rpc_accounts) {
 	return {
-		ADMIN: rpc_accounts[0],
-		OPERATOR: rpc_accounts[1],
-		CHARITY_MSIG: rpc_accounts[2],
-		INCENTIVES_MSIG: rpc_accounts[3],
-		MANUAL_MSIG: rpc_accounts[4],
-		SERVICE_ADDRESS1: rpc_accounts[5],
-		SERVICE_ADDRESS2: rpc_accounts[6],
-		AIRDROP1: rpc_accounts[7],
-		AIRDROP2: rpc_accounts[8],
-		ACCOUNT1: rpc_accounts[9],
-		ACCOUNT2: rpc_accounts[10],
-		ACCOUNT3: rpc_accounts[11],
+		OPERATOR: rpc_accounts[0],
+		MARKET_ADMIN_MSIG: rpc_accounts[1],
+		MARKET_FEES_MSIG: rpc_accounts[2],
+
+		ADAPT_OWNER: rpc_accounts[3],
+		ADAPT_ADMIN: rpc_accounts[4],
+		BUYER1: rpc_accounts[5],
+		BUYER2: rpc_accounts[6],
+		ACCOUNT1: rpc_accounts[7],
+		ACCOUNT2: rpc_accounts[8],
+		ACCOUNT3: rpc_accounts[9],
 	};
 }
 
@@ -25,6 +22,18 @@ export function printTime(timestamp) {
 	console.log('Time is: ', moment.unix(timestamp).utc().format());
 }
 
+const Bluebird = require('bluebird');
+const BigNumber = web3.BigNumber;
+const assert = require('chai').assert;
+const should = require('chai')
+	.use(require('chai-as-promised'))
+	.use(require('chai-bignumber')(BigNumber))
+	.should();
+
 module.exports = {
 	accounts: accounts,
+	BigNumber: BigNumber,
+	Bluebird: Bluebird,
+	assert: assert,
+	should: should,
 };
