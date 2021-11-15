@@ -7,7 +7,7 @@ import wei from "./helpers/wei";
 
 
 const UniqxMarketAdapt = artifacts.require("../contracts/UniqxMarketAdapt.sol");
-const AdaptToken = artifacts.require("../adapt/contracts/Collectibles.sol");
+const AdaptToken = artifacts.require("../adapt/contracts/AdaptCollectibles.sol");
 
 contract('Market - a simple walk-through the functionality', function (rpc_accounts) {
 
@@ -75,9 +75,9 @@ contract('Market - a simple walk-through the functionality', function (rpc_accou
 		).should.be.fulfilled;
 	})
 
-	it('should be able to publish a token to the market', async () => {
+	it('should be able to create an order on the market', async () => {
 
-		let rec = await market.publish(
+		let rec = await market.make(
 			[token1, token2],
 			[ether(1), ether(2)],
 			[0x0, 0x0],
@@ -89,12 +89,12 @@ contract('Market - a simple walk-through the functionality', function (rpc_accou
 		assert.equal(ownerToken1, market.address, 'MARKET should tmp own the token');
 	})
 
-	it('should be able to fulfill a valid acquire request', async () => {
+	it('should be able to fulfill a valid take request', async () => {
 
 		let balanceMarketFees1 = await pGetBalance(ac.MARKET_FEES_MSIG);
 		let balanceAdaptAdmin1 = await pGetBalance(ac.ADAPT_ADMIN);
 
-		let rec = await market.acquire(
+		let rec = await market.take(
 			token1,
 			{from: ac.BUYER1, value: ether(1)}
 		).should.be.fulfilled;

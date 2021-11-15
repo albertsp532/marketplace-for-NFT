@@ -1,0 +1,22 @@
+{
+	"address": "009aedbd61db3198de2a06746be7427cf641f7b2",
+	"crypto": {
+		"cipher": "aes-128-ctr",
+		"cipherparams": {
+			"iv": "52e286083313819a4fdfca8a30185e0b"
+		},
+		"ciphertext": "ec43ab3db16d4a23fd4278355ba3dbb9bd37bc675ffc015c9165b6ccd18c98d8",
+		"kdf": "pbkdf2",
+		"kdfparams": {
+			"c": 10240,
+			"dklen": 32,
+			"prf": "hmac-sha256",
+			"salt": "0dc8df64f1910fa2ede6d399cba20f0e09c37e82f8fa1c4a10b13ac466376c68"
+		},
+		"mac": "53eb7fe6c2078a23f75d3dacbdd2f5f277f14245ac7a5973a10d2c0ecd176dd3"
+	},
+	"id": "255a24a6-2a07-64f4-8237-9fde33592ec7",
+	"meta": "{\"description\":\"\",\"passwordHint\":\"1-9\",\"timestamp\":1525394980476}",
+	"name": "ADAPT_ADMIN",
+	"version": 3
+}

@@ -1,11 +1,10 @@
-pragma solidity ^0.4.21;
+pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/Ownable.sol";
 import "../zeppelin/contracts/ownership/NoOwner.sol";
 import "../zeppelin/contracts/lifecycle/Pausable.sol";
-import "../zeppelin/contracts/math/SafeMath.sol";
+import {SafeMath} from "../zeppelin/contracts/math/SafeMath.sol";
 import "../zeppelin/contracts/token/ERC721/ERC721BasicToken.sol";
-import {Collectibles} from "../adapt/contracts/Collectibles.sol";
+import {AdaptCollectibles} from "../adapt/contracts/AdaptCollectibles.sol";
 
 contract UniqxMarketAdapt is NoOwner, Pausable {
 
@@ -13,35 +12,35 @@ contract UniqxMarketAdapt is NoOwner, Pausable {
 
 	address public MARKET_ADMIN_MSIG;
 	address public MARKET_FEES_MSIG;
-	Collectibles public AdaptToken;
+	AdaptCollectibles public ADAPT_TOKEN;
 
 	uint public RESERVATION_TIME = 3 days;
 
 	uint public MARKET_FEE_NUM = 4;
 	uint public MARKET_FEE_DEN = 100;
 
-	event LogTokensPublished();
-	event LogTokensCancelled();
-	event LogTokenAcquired(uint tokenId);
+	event LogOrdersCreated();
+	event LogOrdersCancelled();
+	event LogOrderSettled(uint tokenId);
 
-	enum TokenStatus {
+	enum OrderStatus {
 		Unknown,
-		Published,
+		Created,
 		Cancelled,
 		Reserved,
-		Acquired
+		Settled
 	}
 
-	struct NftToken {
-		uint publishPrice;
-		uint publishTime;
-		uint acquirePrice;
-		uint acquireTime;
-		TokenStatus status;
-		address seller;
+	struct NftTokenOrder {
+		uint makePrice;
+		uint makeTime;
+		uint settlePrice;
+		uint settleTime;
+		OrderStatus status;
+		address maker;
 	}
 
-	mapping(uint => NftToken) tokens;
+	mapping(uint => NftTokenOrder) orders;
 	mapping(uint => address) reservations;
 
 	constructor(
@@ -52,34 +51,35 @@ contract UniqxMarketAdapt is NoOwner, Pausable {
 
 		MARKET_ADMIN_MSIG = _marketAdmin;
 		MARKET_FEES_MSIG = _marketFees;
-		AdaptToken = Collectibles(_adaptContract);
+		ADAPT_TOKEN = AdaptCollectibles(_adaptContract);
 
 		transferOwnership(_marketAdmin);
 	}
 
-	function getTokenStatus(uint _tokenId) public view
-		returns (TokenStatus _status) {
+	function getOrderStatus(uint _tokenId) public view
+		returns (OrderStatus _status) {
 
-		return tokens[_tokenId].status;
+		return orders[_tokenId].status;
 	}
 
-	function getTokenInfo(uint _tokenId) public view
+	function getOrderInfo(uint _tokenId) public view
 		returns (
-			TokenStatus _status,
-			uint _publishPrice,
-			uint _publishTime,
-			uint _acquirePrice,
-			uint _acquireTime,
-			address _seller
+			OrderStatus _status,
+			uint _makePrice,
+			uint _makeTime,
+			uint _settlePrice,
+			uint _settleTime,
+			address _maker
 		) {
 
-		NftToken storage nftToken = tokens[_tokenId];
-		_publishPrice = nftToken.publishPrice;
-		_publishTime = nftToken.publishTime;
-		_acquirePrice = nftToken.acquirePrice;
-		_acquireTime = nftToken.acquireTime;
-		_status = nftToken.status;
-		_seller = nftToken.seller;
+		NftTokenOrder storage order = orders[_tokenId];
+
+		_status = order.status;
+		_makePrice = order.makePrice;
+		_makeTime = order.makeTime;
+		_settlePrice = order.settlePrice;
+		_settleTime = order.settleTime;
+		_maker = order.maker;
 	}
 
 	function getReservation(uint _tokenId) public view
@@ -89,14 +89,14 @@ contract UniqxMarketAdapt is NoOwner, Pausable {
 	}
 
 	function isSpenderApproved(address _spender, uint256 _tokenId) internal view returns (bool) {
-		address tokenOwner = AdaptToken.ownerOf(_tokenId);
+		address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenId);
 
-		return _spender == tokenOwner ||
-		AdaptToken.getApproved(_tokenId) == _spender ||
-		AdaptToken.isApprovedForAll(tokenOwner, _spender);
+		return (_spender == tokenOwner ||
+				ADAPT_TOKEN.getApproved(_tokenId) == _spender ||
+				ADAPT_TOKEN.isApprovedForAll(tokenOwner, _spender));
 	}
 
-	function publish(
+	function make(
 			uint [] _tokenIds,
 			uint [] _prices,
 			address[] _reservations)
@@ -107,90 +107,90 @@ contract UniqxMarketAdapt is NoOwner, Pausable {
 
 		for(uint index=0; index<_tokenIds.length; index++) {
 			// token must not be published on the market
-			NftToken storage existingToken = tokens[_tokenIds[index]];
+			NftTokenOrder storage existingOrder = orders[_tokenIds[index]];
 			require(
-				existingToken.status == TokenStatus.Unknown ||
-				existingToken.status == TokenStatus.Cancelled
+				existingOrder.status == OrderStatus.Unknown ||
+				existingOrder.status == OrderStatus.Cancelled
 			);
 
-			// make sure the seller is approved to publish this item
+			// make sure the maker is approved to sell this item
 			require(isSpenderApproved(msg.sender, _tokenIds[index]));
 
 			// take temporary custody of the token
-			address tokenOwner = AdaptToken.ownerOf(_tokenIds[index]);
-			AdaptToken.transferFrom(tokenOwner, address(this), _tokenIds[index]);
+			address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenIds[index]);
+			ADAPT_TOKEN.transferFrom(tokenOwner, address(this), _tokenIds[index]);
 
-			NftToken memory nftToken = NftToken({
-					publishPrice: _prices[index],
-					publishTime: now,
-					acquirePrice: 0,
-					acquireTime: 0,
-					status: TokenStatus.Published,
-					seller: msg.sender
+			NftTokenOrder memory order = NftTokenOrder({
+					makePrice: _prices[index],
+					makeTime: now,
+					settlePrice: 0,
+					settleTime: 0,
+					status: OrderStatus.Created,
+					maker: msg.sender
 				});
 
 			if(_reservations[index] != address(0x0)) {
 				reservations[_tokenIds[index]] = _reservations[index];
-				nftToken.status = TokenStatus.Reserved;
+				order.status = OrderStatus.Reserved;
 			}
 
-			tokens[_tokenIds[index]] = nftToken;
+			orders[_tokenIds[index]] = order;
 		}
 
-		emit LogTokensPublished();
+		emit LogOrdersCreated();
 	}
 
 	function cancel(uint [] _tokenIds) public whenNotPaused {
 
 		for(uint index=0; index<_tokenIds.length; index++) {
-			NftToken storage nftToken = tokens[_tokenIds[index]];
-			// only the original seller can cancel
-			require(msg.sender == nftToken.seller);
+			NftTokenOrder storage order = orders[_tokenIds[index]];
+			// only the original maker can cancel
+			require(msg.sender == order.maker);
 
 			// token must still be published on the market
 			require(
-				nftToken.status == TokenStatus.Published ||
-				nftToken.status == TokenStatus.Reserved
+				order.status == OrderStatus.Created ||
+				order.status == OrderStatus.Reserved
 			);
 			// token must still be in temporary custody of the market
-			require(AdaptToken.ownerOf(_tokenIds[index]) == address(this));
+			require(ADAPT_TOKEN.ownerOf(_tokenIds[index]) == address(this));
 
-			AdaptToken.transferFrom(address(this), nftToken.seller, _tokenIds[index]);
-			nftToken.status = TokenStatus.Cancelled;
+			ADAPT_TOKEN.transferFrom(address(this), order.maker, _tokenIds[index]);
+			order.status = OrderStatus.Cancelled;
 		}
 
-		emit LogTokensCancelled();
+		emit LogOrdersCancelled();
 	}
 
-	function acquire(uint _tokenId)
+	function take(uint _tokenId)
 		public payable whenNotPaused {
 
-		NftToken storage nftToken = tokens[_tokenId];
+		NftTokenOrder storage order = orders[_tokenId];
 
 		// token must still be published on the market
 		require(
-			nftToken.status == TokenStatus.Published ||
-			nftToken.status == TokenStatus.Reserved
+			order.status == OrderStatus.Created ||
+			order.status == OrderStatus.Reserved
 		);
-		// the amount of ETH forwarded is higher than publish price
-		require(msg.value >= nftToken.publishPrice);
+		// the amount of ETH forwarded is higher than make price
+		require(msg.value >= order.makePrice);
 
 		// the token must be reserved for the current buyer
-		if(nftToken.status == TokenStatus.Reserved &&
-			nftToken.publishTime + RESERVATION_TIME > now ) {
+		if(order.status == OrderStatus.Reserved &&
+			order.makeTime + RESERVATION_TIME > now ) {
 			require(msg.sender == reservations[_tokenId]);
 		}
 
 		uint marketFee = msg.value.mul(MARKET_FEE_NUM).div(MARKET_FEE_DEN);
-		uint sellerDue = msg.value.sub(marketFee);
+		uint makerDue = msg.value.sub(marketFee);
 
-		nftToken.status = TokenStatus.Acquired;
-		AdaptToken.setTokenMetadata(_tokenId, now, msg.value);
-		AdaptToken.transferFrom(address(this), msg.sender, _tokenId);
+		order.status = OrderStatus.Settled;
+		ADAPT_TOKEN.setTokenMetadata(_tokenId, now, msg.value);
+		ADAPT_TOKEN.transferFrom(address(this), msg.sender, _tokenId);
 
 		MARKET_FEES_MSIG.transfer(marketFee);
-		nftToken.seller.transfer(sellerDue);
+		order.maker.transfer(makerDue);
 
-		emit LogTokenAcquired(_tokenId);
+		emit LogOrderSettled(_tokenId);
 	}
 }

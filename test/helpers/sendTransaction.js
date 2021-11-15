@@ -11,7 +11,7 @@ export function findMethod (abi, name, args) {
 }
 
 export default function sendTransaction (target, name, argsTypes, argsValues, opts) {
-  const abiMethod = findMethod(target.abi, name, argsTypes);
+  const abiMethod = findMethod(target.json, name, argsTypes);
   const encodedData = ethjsABI.encodeMethod(abiMethod, argsValues);
   return target.sendTransaction(Object.assign({ data: encodedData }, opts));
 }
