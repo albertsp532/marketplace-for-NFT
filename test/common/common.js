@@ -30,10 +30,21 @@ const should = require('chai')
 	.use(require('chai-bignumber')(BigNumber))
 	.should();
 
+
+const OrderStatus = {
+	Unknown: 0,
+	Published: 1,
+	Canceled: 2,
+	Reserved: 3,
+	Acquired: 4,
+};
+
+
 module.exports = {
 	accounts: accounts,
 	BigNumber: BigNumber,
 	Bluebird: Bluebird,
 	assert: assert,
 	should: should,
+	OrderStatus: OrderStatus,
 };

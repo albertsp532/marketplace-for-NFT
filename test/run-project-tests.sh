@@ -7,7 +7,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
 
-PROJECT_TESTS=($(/bin/ls ${SCRIPT_DIR}/*.js | sort))
+PROJECT_TESTS=($(/usr/bin/find ${SCRIPT_DIR} -name "*.test.js" -print | sort))
 
 MOCKS_SOL="${ROOT_DIR}/contracts/MockInclude.sol"
 MOCKS_BAK="${ROOT_DIR}/contracts/MockInclude.sol.bak"
