@@ -9,11 +9,11 @@ export let ac = {
 };
 
 export const ContractAdaptToken = {
-	address: '0x4B7cf561861Ea2Ba9508438bD79C41681F4Ef280',
+	address: '0x14527183CE40AaF0A5420c1a25b73c16BCE5895A',
 	json: require('../build/contracts/Collectibles.json'),
 };
 
 export const ContractUniqxMarketAdapt = {
-	address: '0x3FFD5167D95022CC791FeffcA24B9a5d00f17aa1',
+	address: '0x26018084080A9A9de808f12BCcab9860e0B17121',
 	json: require('../build/contracts/UniqxMarketAdapt.json'),
 };

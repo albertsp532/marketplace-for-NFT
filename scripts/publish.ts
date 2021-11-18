@@ -34,7 +34,7 @@ async function publish() {
 		tokens,
 		prices,
 		reservations,
-		{ from: vars.ac.ADAPT_ADMIN , gas: 4695453 }
+		{ from: vars.ac.ADAPT_ADMIN , gas: 4000000 }
 	);
 
 	console.log('Publish Complete!\n', JSON.stringify(rec.logs, null, '\t'));
