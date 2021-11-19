@@ -14,6 +14,7 @@ export function accounts(rpc_accounts) {
 		ACCOUNT1: rpc_accounts[7],
 		ACCOUNT2: rpc_accounts[8],
 		ACCOUNT3: rpc_accounts[9],
+		BUYER3: rpc_accounts[10]
 	};
 }
 
