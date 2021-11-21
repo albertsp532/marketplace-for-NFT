@@ -240,6 +240,9 @@ contract UniqxMarketERC721Auction is NoOwner, Pausable, ReentrancyGuard {
 			AuctionInfo storage existingAuction = marketContract.auctions[_tokenIds[index]];
 			require(existingAuction.status != OrderStatus.Created);
 
+			// make sure the expiry time is at least one hour in the future
+			require(_endTimes[index] > now + 1 hours);
+
 			// make sure the maker is approved to sell this item
 			require(isSpenderApproved(_contract, msg.sender, _tokenIds[index]));
 
@@ -359,6 +362,11 @@ contract UniqxMarketERC721Auction is NoOwner, Pausable, ReentrancyGuard {
 				continue;
 			}
 
+			// skip zero bid ended auctions
+			if (auction.highestBidValue == 0) {
+				continue;
+			}
+
 			// transfer fee to market
 			uint marketFee = auction.highestBidValue.mul(marketFeeNum).div(marketFeeDen);
 			MARKET_FEES_MSIG.transfer(marketFee);
@@ -391,8 +399,8 @@ contract UniqxMarketERC721Auction is NoOwner, Pausable, ReentrancyGuard {
 			AuctionInfo storage auction = marketContract.auctions[_tokenIds[index]];
 			require(auction.status == OrderStatus.Created);
 
-			// auction must have zero bids
-			require(auction.highestBidValue == 0);
+			// auction must be ended or have zero bids
+			require(now > auction.endTime || auction.highestBidValue == 0);
 
 			// only the owner or the maker can cancel the auction
 			require(
@@ -413,5 +421,4 @@ contract UniqxMarketERC721Auction is NoOwner, Pausable, ReentrancyGuard {
 
 		emit LogAuctionsCancelled(_contract, _tokenIds);
 	}
-
 }

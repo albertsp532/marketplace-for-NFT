@@ -4,7 +4,9 @@ import {
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
 const moment = require('moment');
-import { increaseTimeTo } from "../../zeppelin/test/helpers/increaseTime";
+import { duration, increaseTimeTo } from "../../zeppelin/test/helpers/increaseTime";
+import latestTime from '../../zeppelin/test/helpers/latestTime';
+import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
 
 
 const ERC721Token = artifacts.require("../../../adapt/contracts/AdaptCollectibles.sol");
@@ -139,6 +141,13 @@ contract('Testing UniqxMarketERC721Instant', async function (rpc_accounts) {
 		assert.equal(owner, auctionMarket.address); // market still owns the token
 	});
 
+	it('should not allow to cancel an auctoin if it was bidden and is still active', async () => {
+		await auctionMarket.cancelAuctions(
+			erc721Token.address,
+			[ tokens[1] ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.rejectedWith(EVMRevert);
+	});
 
 	it('seek 1 week, should allow buyer3 to take token1', async function () {
 		increaseTimeTo(moment().add(7, 'days').unix());
@@ -157,6 +166,204 @@ contract('Testing UniqxMarketERC721Instant', async function (rpc_accounts) {
 		assert.notEqual(owner, auctionMarket.address); // market still owns the token
 	});
 
+	it('should be able to cancel auction', async () => {
+
+		const oneDayLater = latestTime() + duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayLater ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCreated');
+		let orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Published);
+
+		rec = await auctionMarket.cancelAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCancelled');
+		orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Cancelled);
+	});
+
+	it('should be able to cancel expired auction', async () => {
+
+		const oneDayLater = latestTime() + duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayLater ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCreated');
+		let orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Published);
+
+		increaseTimeTo(oneDayLater + duration.minutes(1));
+
+		rec = await auctionMarket.cancelAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCancelled');
+		orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Cancelled);
+	});
+
+	it('should be able to cancel expired auction when bidden', async () => {
+
+		const oneDayLater = latestTime() + duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayLater ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCreated');
+		let orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Published);
+
+		rec = await auctionMarket.bidAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1.1) ],
+			{ from: ac.BUYER1 , gas: 7000000, value: ether(1.1) }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionBidPlaced');
+
+		increaseTimeTo(oneDayLater + duration.minutes(1));
+
+		rec = await auctionMarket.cancelAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCancelled');
+		orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Cancelled);
+	});
+
+	it('should not be able to make auction with expiry date in the past', async () => {
+
+		const oneDayInThePast = latestTime() - duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayInThePast ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.rejectedWith(EVMRevert);
+	});
+
+	it('should not be able to make auction with expiry lower than 1 hour in the future', async () => {
+
+		const lessThanAnHourInTheFuture = latestTime() - duration.minutes(59);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ lessThanAnHourInTheFuture ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.rejectedWith(EVMRevert);
+	});
+
+	it('should anyone be able to settle if auction has ended', async function () {
+		const oneDayLater = latestTime() + duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayLater ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCreated');
+		let orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[3]);
+		assert.equal(orderStatus, OrderStatus.Published);
+
+		rec = await auctionMarket.bidAuctions(
+			erc721Token.address,
+			[ tokens[3] ],
+			[ ether(1.1) ],
+			{ from: ac.BUYER1 , gas: 7000000, value: ether(1.1) }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionBidPlaced');
+
+		increaseTimeTo(oneDayLater + duration.minutes(1));
+
+		rec = await auctionMarket.takeAuctions( // anyone can settle
+			erc721Token.address,
+			[tokens[3]],
+			{ from: ac.BUYER3 , gas: 7000000}
+		).should.be.fulfilled;
+
+		const owner = await erc721Token.ownerOf(tokens[3]);
+		assert.equal(owner, ac.BUYER1);
+	});
+
+	it('should not take ended auction that was not bidden', async function () {
+		const oneDayLater = latestTime() + duration.days(1);
+
+		let rec = await auctionMarket.makeAuctions(
+			erc721Token.address,
+			[ tokens[4] ],
+			[ ether(1) ],
+			[ ether(2) ],
+			[ oneDayLater ],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
+		).should.be.fulfilled;
+
+		expectEvent.inLogs(rec.logs, 'LogAuctionsCreated');
+		let orderStatus = await auctionMarket.getOrderStatus(erc721Token.address, tokens[4]);
+		assert.equal(orderStatus, OrderStatus.Published);
+
+		increaseTimeTo(oneDayLater + duration.minutes(1));
+
+		rec = await auctionMarket.takeAuctions(
+			erc721Token.address,
+			[tokens[4]],
+			{ from: ac.BUYER3 , gas: 7000000}
+		).should.be.fulfilled;
+
+		let owner = await erc721Token.ownerOf(tokens[4]);
+		assert.equal(owner, auctionMarket.address);
+
+		await auctionMarket.cancelAuctions(
+			erc721Token.address,
+			[tokens[4]],
+			{ from: ac.ADAPT_ADMIN , gas: 7000000}
+		).should.be.fulfilled;
+
+		owner = await erc721Token.ownerOf(tokens[4]);
+		assert.equal(owner, ac.ADAPT_ADMIN);
+	});
 });
 
 
