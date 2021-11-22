@@ -350,7 +350,7 @@ contract('Testing UniqxMarketERC721Instant', async function (rpc_accounts) {
 			erc721Token.address,
 			[tokens[4]],
 			{ from: ac.BUYER3 , gas: 7000000}
-		).should.be.fulfilled;
+		).should.be.rejectedWith(EVMRevert);
 
 		let owner = await erc721Token.ownerOf(tokens[4]);
 		assert.equal(owner, auctionMarket.address);

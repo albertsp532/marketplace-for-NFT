@@ -21,5 +21,7 @@ AuctionMarketInstance.registerContract("0x532b45ca6be21b1425924732eb5eb6eea75db3
 
 
 // staging
-var AuctionMarketInstance = AuctionMarketContract.at("0xf6c28c62cfe9dace20e7f59ab639deaae14275f9");
+var AuctionMarketInstance = AuctionMarketContract.at("0x1c4eb84fdd71511ddebc0849c1f4a479c24e0025");
 AuctionMarketInstance.registerContract("0xce18e1d2ab6113dc6528a4d6405f8f29fa7ce93e", {from: "0x191ff0f55e08bee4bda038efffca6050b410f099", gas: 4000000});
+AuctionMarketInstance.registerContract("0x532b45ca6be21b1425924732eb5eb6eea75db3ad", {from: "0x191ff0f55e08bee4bda038efffca6050b410f099", gas: 4000000});
+AuctionMarketInstance.getOrderInfo("0x532b45ca6be21b1425924732eb5eb6eea75db3ad", "0xe33361f26c8e86aecf1055bc6fa4e9345766110c5825d8323e1caeffe8910869");
