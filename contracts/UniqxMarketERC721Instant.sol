@@ -13,6 +13,7 @@ contract UniqxMarketERC721Instant is NoOwner, Pausable, ReentrancyGuard {
 	enum OrderStatus {
 		Unknown,
 		Created,
+		Reserved,			// not used in thsi contract
 		Cancelled,
 		Acquired
 	}

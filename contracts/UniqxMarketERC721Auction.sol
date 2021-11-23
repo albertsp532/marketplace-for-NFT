@@ -20,6 +20,7 @@ contract UniqxMarketERC721Auction is NoOwner, Pausable, ReentrancyGuard {
 	enum OrderStatus {
 		Unknown,
 		Created,
+		Reserved,		// not used in this contract
 		Cancelled,
 		Acquired
 	}

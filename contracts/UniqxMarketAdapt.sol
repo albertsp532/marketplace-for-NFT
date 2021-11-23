@@ -11,81 +11,79 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 
 	using SafeMath for uint;
 
-	address public MARKET_FEES_MSIG;
-	AdaptCollectibles public ADAPT_TOKEN;
+	// constants
+	uint public constant RESERVATION_TIME 	= 3 days;
+	uint public constant MIN_DONATION 		= 10000000000000 wei;
+	uint public constant MARKET_FEE_NUM 	= 4;
+	uint public constant MARKET_FEE_DEN 	= 100;
 
-	uint public RESERVATION_TIME = 3 days;
-	uint public MIN_DONATION = 10000000000000 wei;
-
-	uint public MARKET_FEE_NUM = 4;
-	uint public MARKET_FEE_DEN = 100;
-
-	event LogOrdersCreated(uint[] _tokens);
-	event LogOrdersCancelled(uint[] _tokens);
-	event LogOrderAcquired(
-		uint _tokenId,
-		uint _price,
-		address _maker,
-		address _taker
-	);
-
+	// declarations
 	enum OrderStatus {
 		Unknown,
-		Created,
+		Listed,
+		Reserved,
 		Cancelled,
-		Acquired,
-		Reserved
+		Sold
 	}
 
-	struct NftTokenOrder {
-		uint makePrice;
-		uint makeTime;
-		uint acquirePrice;
-		uint acquireTime;
+	struct OrderInfo {
 		OrderStatus status;
-		address maker;
+		uint buyPrice;
+		uint listedAt;
+		address seller;
 		address owner;
 	}
 
-	mapping(uint => NftTokenOrder) orders;
+	// attributes
+	address public MARKET_FEES_MSIG;
+	AdaptCollectibles public ADAPT_TOKEN;
+	mapping(uint => OrderInfo) orders;
 	mapping(uint => address) reservations;
 
+	// events
+	event LogTokensListed(
+		uint[] tokenIds,
+		uint[] buyPrices,
+		address[] reservations,
+		address[] owners,
+		address seller,
+		uint listedAt
+	);
+	event LogTokenSold(uint tokenId, address buyer, uint price, uint soldAt);
+	event LogTokensCancelled(uint[] tokens, uint cancelledAt);
+
+	// entry point
 	constructor(
-		address _marketAdmin,
-		address _marketFees,
-		address _adaptContract
+		address marketAdmin,
+		address marketFees,
+		address adaptContract
 	) public {
 
-		MARKET_FEES_MSIG = _marketFees;
-		ADAPT_TOKEN = AdaptCollectibles(_adaptContract);
+		MARKET_FEES_MSIG 	= marketFees;
+		ADAPT_TOKEN 		= AdaptCollectibles(adaptContract);
 
-		transferOwnership(_marketAdmin);
+		transferOwnership(marketAdmin);
 	}
 
-	function getOrderStatus(uint _tokenId) public view
+	function getOrderStatus(uint tokenId) public view
 		returns (OrderStatus _status) {
 
-		return orders[_tokenId].status;
+		return orders[tokenId].status;
 	}
 
 	function getOrderInfo(uint _tokenId) public view
 		returns (
 			OrderStatus _status,
-			uint _makePrice,
-			uint _makeTime,
-			uint _acquirePrice,
-			uint _acquireTime,
-			address _maker
-		) {
-
-		NftTokenOrder storage order = orders[_tokenId];
-
+			uint _buyPrice,
+			uint _listedAt,
+			address _seller
+		)
+	{
+		OrderInfo storage order = orders[_tokenId];
 		_status = order.status;
-		_makePrice = order.makePrice;
-		_makeTime = order.makeTime;
-		_acquirePrice = order.acquirePrice;
-		_acquireTime = order.acquireTime;
-		_maker = order.maker;
+		_buyPrice = order.buyPrice;
+		_listedAt = order.listedAt;
+		_seller = order.seller;
 	}
 
 	function getReservation(uint _tokenId) public view
@@ -94,94 +92,120 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		return reservations[_tokenId];
 	}
 
-	function isSpenderApproved(address _spender, uint256 _tokenId) internal view returns (bool) {
+	function isSpenderApproved(
+		address _spender,
+		uint256 _tokenId
+	)
+		internal
+		view
+		returns (bool)
+	{
 		address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenId);
 
-		return (_spender == tokenOwner ||
-				ADAPT_TOKEN.getApproved(_tokenId) == _spender ||
-				ADAPT_TOKEN.isApprovedForAll(tokenOwner, _spender));
+		return (
+			_spender == tokenOwner
+			|| ADAPT_TOKEN.getApproved(_tokenId) == _spender
+			|| ADAPT_TOKEN.isApprovedForAll(tokenOwner, _spender)
+		);
 	}
 
-	function makeOrders(
-			uint [] _tokenIds,
-			uint [] _prices,
-			address[] _reservations)
-		public whenNotPaused nonReentrant
+	function listTokens(
+		uint [] tokenIds,
+		uint [] buyPrices,
+		address[] _reservations
+	)
+		public
+		whenNotPaused
+		nonReentrant
 	{
-		require(_tokenIds.length == _prices.length);
-		require(_tokenIds.length == _reservations.length);
+		require(tokenIds.length == buyPrices.length);
+		require(tokenIds.length == _reservations.length);
 
-		for(uint i=0; i < _tokenIds.length; i++) {
+		address[] memory owners = new address[](buyPrices.length);
 
-			require(_prices[i] >= MIN_DONATION);
+		for(uint i = 0; i < tokenIds.length; i++) {
 
-			// token must not be published on the market
-			NftTokenOrder storage existingOrder = orders[_tokenIds[i]];
+			require(buyPrices[i] >= MIN_DONATION);
+
+			// make sure the token is not listed already
+			OrderInfo storage existingOrder = orders[tokenIds[i]];
 			require(
-				existingOrder.status == OrderStatus.Unknown ||
-				existingOrder.status == OrderStatus.Cancelled
+				existingOrder.status != OrderStatus.Listed &&
+				existingOrder.status != OrderStatus.Reserved
 			);
 
-			// make sure the maker is approved to sell this item
-			require(isSpenderApproved(msg.sender, _tokenIds[i]));
+			// make sure the seller is approved to sell this item
+			require(isSpenderApproved(msg.sender, tokenIds[i]));
 
-			// take temporary custody of the token
-			address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenIds[i]);
-			ADAPT_TOKEN.transferFrom(tokenOwner, address(this), _tokenIds[i]);
+			// market will now escrow the token (owner or seller must approve unix market before listing)
+			address tokenOwner = ADAPT_TOKEN.ownerOf(tokenIds[i]);
+			ADAPT_TOKEN.transferFrom(tokenOwner, address(this), tokenIds[i]);
+			owners[i] = tokenOwner;
 
-			NftTokenOrder memory order = NftTokenOrder({
-					makePrice: _prices[i],
-					makeTime: now,
-					acquirePrice: 0,
-					acquireTime: 0,
-					status: OrderStatus.Created,
-					maker: msg.sender,
+			OrderInfo memory order = OrderInfo(
+				{
+					buyPrice: buyPrices[i],
+					listedAt: now,
+					status: OrderStatus.Listed,
+					seller: msg.sender,
 					owner: tokenOwner
-				});
+				}
+			);
 
 			if(_reservations[i] != address(0x0)) {
-				reservations[_tokenIds[i]] = _reservations[i];
+				reservations[tokenIds[i]] = _reservations[i];
 				order.status = OrderStatus.Reserved;
 			}
 
-			orders[_tokenIds[i]] = order;
+			orders[tokenIds[i]] = order;
 		}
 
-		emit LogOrdersCreated(_tokenIds);
+		emit LogTokensListed(tokenIds, buyPrices, _reservations, owners, msg.sender, now);
 	}
 
-	function cancelOrders(uint [] _tokenIds)
-	    public whenNotPaused nonReentrant
+	function cancelTokens(uint[] tokenIds)
+		public
+		whenNotPaused
+		nonReentrant
 	{
-		for(uint i=0; i < _tokenIds.length; i++) {
-			NftTokenOrder storage order = orders[_tokenIds[i]];
-			// only the original maker can cancel
-			require(msg.sender == order.maker);
+		for(uint i=0; i < tokenIds.length; i++) {
+			OrderInfo storage order = orders[tokenIds[i]];
 
-			// token must still be published on the market
+			// token must be listed or reserved
 			require(
-				order.status == OrderStatus.Created ||
+				order.status == OrderStatus.Listed ||
 				order.status == OrderStatus.Reserved
 			);
+
+			// only the owner or the seller can cancel a token
+			require(
+				msg.sender == order.seller ||
+				msg.sender == order.owner
+			);
+
 			// token must still be in temporary custody of the market
-			require(ADAPT_TOKEN.ownerOf(_tokenIds[i]) == address(this));
+			require(ADAPT_TOKEN.ownerOf(tokenIds[i]) == address(this));
 
-			// transfer back to the original
-			ADAPT_TOKEN.transferFrom(address(this), order.owner, _tokenIds[i]);
+			// transfer the token back to the owner
+			ADAPT_TOKEN.transferFrom(address(this), order.owner, tokenIds[i]);
 
-			order.status = OrderStatus.Cancelled;
+			delete orders[tokenIds[i]];
 		}
 
-		emit LogOrdersCancelled(_tokenIds);
+		emit LogTokensCancelled(tokenIds, now);
 	}
 
-	function takeOrders(uint [] _tokenIds)
-		public payable whenNotPaused nonReentrant
+	function buyTokens(uint[] tokenIds)
+		public
+		payable
+		whenNotPaused
+		nonReentrant
 	{
 		uint amountLeft = msg.value;
-		for(uint i=0; i<_tokenIds.length; i++) {
-			uint amount = orders[_tokenIds[i]].makePrice;
-			takeOrderInternal(_tokenIds[i], amount);
+
+		for(uint i = 0; i < tokenIds.length; i++) {
+			uint amount = orders[tokenIds[i]].buyPrice;
+			buyTokenInternal(tokenIds[i], amount);
 			amountLeft = amountLeft.sub(amount);
 		}
 
@@ -189,44 +213,48 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		require(amountLeft == 0);
 	}
 
-	function takeOrder(uint _tokenId)
-		public payable whenNotPaused nonReentrant
+	function buyToken(uint tokenId)
+		public
+		payable
+		whenNotPaused
+		nonReentrant
 	{
-		takeOrderInternal(_tokenId, msg.value);
+		buyTokenInternal(tokenId, msg.value);
 	}
 
-	function takeOrderInternal(uint _tokenId, uint _amount)
-	    private
-	{
-		NftTokenOrder storage order = orders[_tokenId];
+	function buyTokenInternal(uint tokenId, uint _amount) private {
 
+		OrderInfo storage order = orders[tokenId];
+
+		// token must be listed or reserved
 		require(
-			order.status == OrderStatus.Created ||
+			order.status == OrderStatus.Listed ||
 			order.status == OrderStatus.Reserved
 		);
 
-		// the amount of ETH forwarded is higher than the make price
-		require(_amount >= order.makePrice);
+		if (order.status == OrderStatus.Reserved && msg.sender != reservations[tokenId]) {
+			require(now > order.listedAt + RESERVATION_TIME);
+		}
 
-		// mark the order as acquired
-		order.status 		= OrderStatus.Acquired;
-		order.acquirePrice 	= _amount;
-		order.acquireTime 	= now;
+		// the amount of ETH forwarded is higher than the make price
+		require(_amount >= order.buyPrice);
 
 		// update metadata before transfer
-		ADAPT_TOKEN.setTokenMetadata(_tokenId, now, order.makePrice);
+		ADAPT_TOKEN.setTokenMetadata(tokenId, now, order.buyPrice);
 
 		// really transfer the token to the buyer
-		ADAPT_TOKEN.transferFrom(address(this), msg.sender, _tokenId);
+		ADAPT_TOKEN.transferFrom(address(this), msg.sender, tokenId);
 
 		// transfer fee to the market
 		uint marketFee = _amount.mul(MARKET_FEE_NUM).div(MARKET_FEE_DEN);
 		MARKET_FEES_MSIG.transfer(marketFee);
 
-		// transfer the amount due to the maker
-		uint makerDue = order.makePrice.sub(marketFee);
-		order.maker.transfer(makerDue);
+		// transfer the amount due to the owner
+		uint ownerDue = order.buyPrice.sub(marketFee);
+		order.owner.transfer(ownerDue);
 
-		emit LogOrderAcquired(_tokenId, order.makePrice, order.maker, msg.sender);
+		delete orders[tokenId];
+
+		emit LogTokenSold(tokenId, msg.sender, _amount, now);
 	}
 }
