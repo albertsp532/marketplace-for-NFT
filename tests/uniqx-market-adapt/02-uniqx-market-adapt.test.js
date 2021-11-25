@@ -1,5 +1,5 @@
 import {
-	accounts, assert, should, BigNumber, Bluebird, parseAdaptTokenEvent, parseUnixMarketEvent, parseAdaptMarketEvent
+	accounts, assert, should, BigNumber, Bluebird, parseAdaptTokenEvent, parseUnixMarketEvent, parseAdaptMarketEvent, OrderStatus
 } from '../common/common';
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
@@ -63,8 +63,9 @@ contract('Adapt Market - test logging', function (rpc_accounts) {
 				return;
 			}
 
+			const blockTimestamp = await web3.eth.getBlock(result['blockNumber']).timestamp;
 			const events = abiDecoder.decodeLogs([result]);
-			await parseAdaptMarketEvent(events[0]);
+			await parseAdaptMarketEvent(events[0], blockTimestamp);
 		});
 	});
 
@@ -131,6 +132,9 @@ contract('Adapt Market - test logging', function (rpc_accounts) {
 			tokens[2],
 			{ from: ac.BUYER1, gas: 7000000, value: ether(3)}
 		).should.be.fulfilled;
+
+		const owner = await adapt.ownerOf(tokens[2]);
+		assert.equal(owner, ac.BUYER1, 'BUYER1 should tmp own tokens[2]');
 	});
 
 	it('BUYER1 should not be able to donate for a token reserved for BUYER2', async () => {
@@ -162,6 +166,29 @@ contract('Adapt Market - test logging', function (rpc_accounts) {
 			tokens.slice(5),
 			{ from: ac.BUYER1, gas: 7000000, value: ether(5)}
 		).should.be.fulfilled;
+	});
+
+	it('BUYER1 should not be able to list a token that was sold already', async () => {
+
+		// approve market to transfer all erc721 tokens hold by buyer1
+		await adapt.setApprovalForAll(
+			market.address,
+			true,
+			{
+				from: ac.BUYER1,
+				gas: 7000000
+			}
+		).should.be.fulfilled;
+
+		const status = await market.getOrderStatus(tokens[2]);
+		assert.equal(status, OrderStatus.Unknown, "Order should not be listed");
+
+		await market.listTokens(
+			[tokens[2]],
+			[prices[2]],
+			[reservations[2]],
+			{ from: ac.BUYER1, gas: 7000000 }
+		).should.be.rejectedWith(EVMRevert);
 	});
 });
 

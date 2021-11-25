@@ -46,11 +46,10 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		uint[] buyPrices,
 		address[] reservations,
 		address[] owners,
-		address seller,
-		uint listedAt
+		address seller
 	);
-	event LogTokenSold(uint tokenId, address buyer, uint price, uint soldAt);
-	event LogTokensCancelled(uint[] tokens, uint cancelledAt);
+	event LogTokenSold(uint tokenId, address buyer, uint price);
+	event LogTokensCancelled(uint[] tokens);
 
 	// entry point
 	constructor(
@@ -118,24 +117,28 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		whenNotPaused
 		nonReentrant
 	{
-		require(tokenIds.length == buyPrices.length);
-		require(tokenIds.length == _reservations.length);
+		require(tokenIds.length > 0, "Array must have at least one entry");
+		require(tokenIds.length == buyPrices.length, "Array lengths must match");
+		require(tokenIds.length == _reservations.length, "Array lengths must match");
 
 		address[] memory owners = new address[](buyPrices.length);
 
 		for(uint i = 0; i < tokenIds.length; i++) {
 
-			require(buyPrices[i] >= MIN_DONATION);
-
-			// make sure the token is not listed already
 			OrderInfo storage existingOrder = orders[tokenIds[i]];
 			require(
 				existingOrder.status != OrderStatus.Listed &&
-				existingOrder.status != OrderStatus.Reserved
+				existingOrder.status != OrderStatus.Reserved,
+				"Token must not be listed already"
 			);
 
-			// make sure the seller is approved to sell this item
-			require(isSpenderApproved(msg.sender, tokenIds[i]));
+			require(buyPrices[i] >= MIN_DONATION, "A minimum donation is enforced by the market");
+
+			(uint256 timestamp, uint256 donation, uint256 copy) = ADAPT_TOKEN.getTokenMetadata(tokenIds[i]);
+			require(timestamp == 0 && donation == 0, "Timestamp and donation must not be set");
+			copy; // silence unused parameter warning
+
+			require(isSpenderApproved(msg.sender, tokenIds[i]), "The seller must be allowed to sell the token");
 
 			// market will now escrow the token (owner or seller must approve unix market before listing)
 			address tokenOwner = ADAPT_TOKEN.ownerOf(tokenIds[i]);
@@ -160,7 +163,7 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 			orders[tokenIds[i]] = order;
 		}
 
-		emit LogTokensListed(tokenIds, buyPrices, _reservations, owners, msg.sender, now);
+		emit LogTokensListed(tokenIds, buyPrices, _reservations, owners, msg.sender);
 	}
 
 	function cancelTokens(uint[] tokenIds)
@@ -168,23 +171,22 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		whenNotPaused
 		nonReentrant
 	{
+		require(tokenIds.length > 0, "Array must have at least one entry");
+
 		for(uint i=0; i < tokenIds.length; i++) {
 			OrderInfo storage order = orders[tokenIds[i]];
 
-			// token must be listed or reserved
 			require(
 				order.status == OrderStatus.Listed ||
-				order.status == OrderStatus.Reserved
+				order.status == OrderStatus.Reserved,
+				"Token must be listed or reserved"
 			);
 
-			// only the owner or the seller can cancel a token
 			require(
 				msg.sender == order.seller ||
-				msg.sender == order.owner
+				msg.sender == order.owner,
+				"Only the owner or the seller can cancel a token"
 			);
-
-			// token must still be in temporary custody of the market
-			require(ADAPT_TOKEN.ownerOf(tokenIds[i]) == address(this));
 
 			// transfer the token back to the owner
 			ADAPT_TOKEN.transferFrom(address(this), order.owner, tokenIds[i]);
@@ -192,7 +194,7 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 			delete orders[tokenIds[i]];
 		}
 
-		emit LogTokensCancelled(tokenIds, now);
+		emit LogTokensCancelled(tokenIds);
 	}
 
 	function buyTokens(uint[] tokenIds)
@@ -201,6 +203,8 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		whenNotPaused
 		nonReentrant
 	{
+		require(tokenIds.length > 0, "Array must have at least one entry");
+
 		uint amountLeft = msg.value;
 
 		for(uint i = 0; i < tokenIds.length; i++) {
@@ -209,8 +213,7 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 			amountLeft = amountLeft.sub(amount);
 		}
 
-		// the bundled value should match the price of all orders
-		require(amountLeft == 0);
+		require(amountLeft == 0, "The amount passed must match the prices sum of all tokes");
 	}
 
 	function buyToken(uint tokenId)
@@ -222,22 +225,24 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		buyTokenInternal(tokenId, msg.value);
 	}
 
-	function buyTokenInternal(uint tokenId, uint _amount) private {
+	function buyTokenInternal(uint tokenId, uint amount) private {
 
 		OrderInfo storage order = orders[tokenId];
 
-		// token must be listed or reserved
 		require(
 			order.status == OrderStatus.Listed ||
-			order.status == OrderStatus.Reserved
+			order.status == OrderStatus.Reserved,
+			"Token must be listed or reserved"
 		);
 
-		if (order.status == OrderStatus.Reserved && msg.sender != reservations[tokenId]) {
-			require(now > order.listedAt + RESERVATION_TIME);
+		if (
+			order.status == OrderStatus.Reserved &&
+			msg.sender != reservations[tokenId]
+		) {
+			require(now > order.listedAt + RESERVATION_TIME, "When not reserved for sender, reservation must be expired");
 		}
 
-		// the amount of ETH forwarded is higher than the make price
-		require(_amount >= order.buyPrice);
+		require(amount >= order.buyPrice, "The amount of ETH passed must be greater than or equal to the buy price");
 
 		// update metadata before transfer
 		ADAPT_TOKEN.setTokenMetadata(tokenId, now, order.buyPrice);
@@ -246,7 +251,7 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 		ADAPT_TOKEN.transferFrom(address(this), msg.sender, tokenId);
 
 		// transfer fee to the market
-		uint marketFee = _amount.mul(MARKET_FEE_NUM).div(MARKET_FEE_DEN);
+		uint marketFee = amount.mul(MARKET_FEE_NUM).div(MARKET_FEE_DEN);
 		MARKET_FEES_MSIG.transfer(marketFee);
 
 		// transfer the amount due to the owner
@@ -255,6 +260,6 @@ contract UniqxMarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 
 		delete orders[tokenId];
 
-		emit LogTokenSold(tokenId, msg.sender, _amount, now);
+		emit LogTokenSold(tokenId, msg.sender, amount);
 	}
 }

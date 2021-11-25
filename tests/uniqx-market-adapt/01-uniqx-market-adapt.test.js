@@ -191,6 +191,7 @@ contract('Market - a simple walk-through the functionality', function (rpc_accou
 
 		const tokenStatus = await market.getOrderStatus(tokens[3]);
 		assert.equal(tokenStatus, 1, 'The order should remain in \'Listed\' state');
+		// MC: please use enums instead of constants like these!
 	});
 
 	it('should disallow to publish a token which was sold', async () => {
