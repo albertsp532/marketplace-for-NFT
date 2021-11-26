@@ -7,9 +7,9 @@ import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
 const moment = require('moment');
 
 const AdaptCollectibles = artifacts.require("../../../adapt/contracts/AdaptCollectibles.sol");
-const UniqxMarketERC721 = artifacts.require('../../contracts/UniqxMarketERC721Instant.sol');
+const UniqxMarketERC721 = artifacts.require('../../contracts/UniqxMarketERC721Auction.sol');
 
-contract('Testing token listing', async function (rpc_accounts) {
+contract('Testing token listing - auction', async function (rpc_accounts) {
 
 	const ac = accounts(rpc_accounts);
 	let uniqxMarket;
@@ -18,6 +18,8 @@ contract('Testing token listing', async function (rpc_accounts) {
 	const tokensCount = 10;
 	let tokens = [];
 	let buyPrices = [];
+	let startPrices = [];
+	let endTimes = [];
 
 	it('should successfully deploy the market contract and the adapt token', async function () {
 
@@ -55,9 +57,12 @@ contract('Testing token listing', async function (rpc_accounts) {
 
 		console.log(`GAS - Mass mint ${tokensCount} adapt tokens: ${ret.receipt.gasUsed}`);
 
+		const threeDaysLater = moment().add(3, 'days').unix();
 		for (let i = 0; i < tokensCount; i++) {
 			tokens[i] = await adaptCollectibles.tokenByIndex(i);
 			buyPrices[i] = ether(9);
+			startPrices[i] = ether(1);
+			endTimes[i] = threeDaysLater;
 		}
 	});
 
@@ -77,8 +82,10 @@ contract('Testing token listing', async function (rpc_accounts) {
 	});
 
 	it('should not be able to list zero tokens', async function () {
-		await uniqxMarket.listTokens(
+		await uniqxMarket.listTokensAuction(
 			adaptCollectibles.address,
+			[],
+			[],
 			[],
 			[],
 			{
@@ -106,11 +113,13 @@ contract('Testing token listing', async function (rpc_accounts) {
 		assert.equal(owner, ac.ACCOUNT1, 'unexpected owner - ACCOUNT1 should own the token');
 	});
 
-	it('the SELLER should NOT be able to list 10 adapt tokens for sale unless he gets approval - fixed price format', async () => {
-		await uniqxMarket.listTokens(
+	it('the SELLER should NOT be able to list 10 adapt tokens for sale unless he gets approval- auction format', async () => {
+		await uniqxMarket.listTokensAuction(
 			adaptCollectibles.address,
 			tokens,
 			buyPrices,
+			startPrices,
+			endTimes,
 			{
 				from: ac.SELLER,
 				gas: 7000000
@@ -164,12 +173,14 @@ contract('Testing token listing', async function (rpc_accounts) {
 		).should.be.fulfilled;
 	});
 
-	it('the SELLER should be able to list 10 adapt tokens for sale - fixed price', async () => {
+	it('the SELLER should be able to list 10 adapt tokens for sale - auction format', async () => {
 
-		const ret = await uniqxMarket.listTokens(
+		const ret = await uniqxMarket.listTokensAuction(
 			adaptCollectibles.address,
 			tokens,
 			buyPrices,
+			startPrices,
+			endTimes,
 			{
 				from: ac.SELLER,
 				gas: 7000000
@@ -178,10 +189,9 @@ contract('Testing token listing', async function (rpc_accounts) {
 
 		//console.log(`@@@@ rec: ${JSON.stringify(ret, null, '\t')}`);
 
-		console.log(`GAS - List ${tokensCount} adapt tokens fixed price: ${ret.receipt.gasUsed}`);
+		console.log(`GAS - List for auction ${tokensCount} adapt tokens: ${ret.receipt.gasUsed}`);
 
 		expectEvent.inLogs(ret.logs, 'LogTokensListed');
-
 		for (let i = 0; i < tokensCount; i++) {
 			const owner = await adaptCollectibles.ownerOf(tokens[i]);
 			assert.equal(owner, uniqxMarket.address, 'unexpected owner - market should own the token');
@@ -193,6 +203,28 @@ contract('Testing token listing', async function (rpc_accounts) {
 
 			const buyPrice = new BigNumber(info[1]);
 			buyPrice.should.be.bignumber.equal(buyPrices[i]);
+
+			assert.equal(info[2], '0x0000000000000000000000000000000000000000', 'unexpected buyer');
+
+			const startPrice = new BigNumber(info[3]);
+			startPrice.should.be.bignumber.equal(startPrices[i]);
+
+			assert.equal(info[4], endTimes[i], 'unexpected end time');
+			assert.equal(info[5], 0, 'unexpected highest bid');
 		}
+	});
+
+	it('the SELLER should NOT be able to list a token which is already listed - auction format ', async function () {
+		await uniqxMarket.listTokensAuction(
+			adaptCollectibles.address,
+			[tokens[0]],
+			[buyPrices[0]],
+			[startPrices[0]],
+			[endTimes[0]],
+			{
+				from: ac.SELLER,
+				gas: 7000000
+			}
+		).should.be.rejectedWith(EVMRevert);
 	});
 });

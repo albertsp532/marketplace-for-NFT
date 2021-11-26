@@ -1,315 +1,318 @@
 pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/NoOwner.sol";
-import "../zeppelin/contracts/lifecycle/Pausable.sol";
-import "../zeppelin/contracts/ReentrancyGuard.sol";
 import {SafeMath} from "../zeppelin/contracts/math/SafeMath.sol";
 import {ERC721Token} from "../zeppelin/contracts/token/ERC721/ERC721Token.sol";
+import {UniqxMarketBase} from "./UniqxMarketBase.sol";
 
-contract UniqxMarketERC721Instant is NoOwner, Pausable, ReentrancyGuard {
+contract UniqxMarketERC721Instant is UniqxMarketBase {
 
 	using SafeMath for uint;
 
-	enum OrderStatus {
-		Unknown,
-		Created,
-		Reserved,			// not used in thsi contract
-		Cancelled,
-		Acquired
-	}
-
+	/////////////////////////////////////// CONSTANTS ///////////////////////////////////////
+	/////////////////////////////////////// TYPES ///////////////////////////////////////////
 	struct OrderInfo {
-		uint makePrice;
-		uint makeTime;
-		OrderStatus status;
-		address maker;
-		address owner;
+		address owner;	// the user who owns the token sold via this order
+		uint buyPrice;	// holds the 'buy it now' price
 	}
 
-	struct UniqxMarketContract {
-		bool registered;
-		bool ordersAllowed;
-		mapping(uint => OrderInfo) orders;
-	}
-
-	uint public MIN_SELL_VALUE = 10000000000000 wei;
-	address public MARKET_FEES_MSIG;
-	uint public marketFeeNum = 1;
-	uint public marketFeeDen = 100;
-	bool public ordersAllowed = true;
-	mapping(address => UniqxMarketContract) contracts;
-
-
-	constructor(
-		address _marketAdmin,
-		address _marketFees
-	) public {
-		MARKET_FEES_MSIG = _marketFees;
-		transferOwnership(_marketAdmin);
-	}
-
-	event AllowOrders();
-  	event DisallowOrders();
-	event AllowContractOrders(address _contract);
-	event DisallowContractOrders(address _contract);
-	event RegisterContract(address _contract);
-	event SetPercentageFee(uint _marketFeeNum, uint _marketFeeDen);
-	event LogOrdersCreated(address _contract, uint[] _tokens);
-	event LogOrdersCancelled(address _contract, uint[] _tokens);
-	event LogOrdersChanged(address _contract, uint[] _tokens);
-	event LogOrderAcquired(
-		address _contract,
-		uint _tokenId,
-		uint _price,
-		address _maker,
-		address _taker
+	/////////////////////////////////////// EVENTS //////////////////////////////////////////
+	event LogTokenSold(address token, uint tokenId, address buyer);
+	event LogTokensSold(address token, uint[] tokenIds, address buyer);
+	event LogTokenListed(
+		address token,
+		uint tokenId,
+		address owner,
+		address seller,
+		uint buyPrice
+	);
+	event LogTokensListed(
+		address token,
+		uint[] tokenIds,
+		address[] owners,
+		address seller,
+		uint[] buyPrices
 	);
 
-	modifier whenOrdersNotAllowed() {
-		require(!ordersAllowed);
-		_;
+	/////////////////////////////////////// VARIABLES ///////////////////////////////////////
+	// TokenContract -> TokenId -> OrderInfo
+	mapping(address => mapping(uint => OrderInfo)) orders;
+
+	/////////////////////////////////////// MODIFIERS ///////////////////////////////////////
+	/////////////////////////////////////// PUBLIC //////////////////////////////////////////
+	constructor(
+		address admin,
+		address marketFeeCollector
+	) public {
+
+		MARKET_FEE_COLLECTOR = marketFeeCollector;
+		transferOwnership(admin);
 	}
 
-	modifier whenOrdersAllowed() {
-		require(ordersAllowed);
-		_;
+	function getOrderInfo(address token, uint tokenId)
+		public
+		view
+		returns (address owner, uint buyPrice)
+	{
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
+
+		OrderInfo storage order = orders[token][tokenId];
+
+		owner		= order.owner;
+		buyPrice 	= order.buyPrice;
 	}
 
-	function allowOrders() onlyOwner whenOrdersNotAllowed public {
+	function tokenIsListed(address token, uint tokenId)
+		public
+		view
+		returns(bool listed)
+	{
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
 
-		ordersAllowed = true;
-		emit AllowOrders();
+		OrderInfo storage order = orders[token][tokenId];
+
+		return (order.owner != address(0x0));
 	}
 
-	function disallowOrders() onlyOwner whenOrdersAllowed public {
+	function listToken(
+		address token,
+		uint tokenId,
+		uint buyPrice
+	)
+		whenNotPaused
+		whenOrdersEnabled
+		nonReentrant
+		public
+	{
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
+		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
 
-		ordersAllowed = false;
-		emit DisallowOrders();
+		ERC721Token tokenInstance = ERC721Token(token);
+
+		address owner = listTokenInternal(token, tokenInstance, tokenId, buyPrice);
+
+		emit LogTokenListed(
+			token,
+			tokenId,
+			owner,
+			msg.sender,
+			buyPrice
+		);
 	}
 
-	function allowContractOrders(address _contract) onlyOwner public {
+	function buyToken(
+		address token,
+		uint tokenId
+	)
+		whenNotPaused
+		nonReentrant
+		public
+		payable
+	{
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
 
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
+		ERC721Token tokenInstance = ERC721Token(token);
 
-		require(!marketContract.ordersAllowed);
+		buyTokenInternal(token, tokenInstance, tokenId, 0);
 
-		marketContract.ordersAllowed = true;
-
-		emit AllowContractOrders(_contract);
+		emit LogTokenSold(token, tokenId, msg.sender);
 	}
 
-	function disallowContractOrders(address _contract) onlyOwner public {
+	function cancelToken(
+		address token,
+		uint tokenId
+	)
+		whenNotPaused
+		nonReentrant
+		public
+	{
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
 
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
-
-		require(marketContract.ordersAllowed);
-
-		marketContract.ordersAllowed = false;
-
-		emit DisallowContractOrders(_contract);
+		emit LogTokenCancelled(token, tokenId);
 	}
 
-	function registerContract(address _contract) public onlyOwner {
+	/////////////////////////////////////// BATCH ///////////////////////////////////////////
+	function listTokens(
+		address token, // MC: rename to tokenContract
+		uint[] tokenIds,
+		uint[] buyPrices
+	)
+		whenNotPaused
+		whenOrdersEnabled
+		nonReentrant
+		public
+	{
+		require(tokenIds.length > 0, "Array must have at least one entry");
+		require(tokenIds.length == buyPrices.length, "Array lengths must match");
 
-		require(!contracts[_contract].registered);
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
+		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
 
-		UniqxMarketContract memory newMarketContract = UniqxMarketContract({
-			registered: true,
-			ordersAllowed: true
-		});
+		ERC721Token tokenInstance = ERC721Token(token);
 
-		contracts[_contract] = newMarketContract;
-
-		emit RegisterContract(_contract);
-	}
-
-	function setPercentageFee(uint _marketFeeNum, uint _marketFeeDen)
-	public onlyOwner {
-
-		marketFeeNum = _marketFeeNum;
-		marketFeeDen = _marketFeeDen;
-
-		emit SetPercentageFee(_marketFeeNum, _marketFeeDen);
-	}
-
-	function isSpenderApproved(address _contract, address _spender, uint256 _tokenId)
-	internal view returns (bool) {
-
-		require(contracts[_contract].registered);
-
-		ERC721Token token = ERC721Token(_contract);
-		address tokenOwner = token.ownerOf(_tokenId);
-
-		return (_spender == tokenOwner ||
-				token.getApproved(_tokenId) == _spender ||
-				token.isApprovedForAll(tokenOwner, _spender));
-	}
-
-	function getOrderStatus(address _contract, uint _tokenId) public view
-		returns (OrderStatus _status) {
-
-		UniqxMarketContract storage marketContract = contracts[_contract];
-
-		require(marketContract.registered);
-
-		return marketContract.orders[_tokenId].status;
-	}
-
-	function getOrderInfo(address _contract, uint _tokenId) public view
-		returns (
-			OrderStatus _status,
-			uint _makePrice,
-			uint _makeTime,
-			address _maker
-		) {
-
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
-
-		OrderInfo storage order = marketContract.orders[_tokenId];
-
-		_status = order.status;
-		_makePrice = order.makePrice;
-		_makeTime = order.makeTime;
-		_maker = order.maker;
-	}
-
-	function makeOrders(
-			address _contract,
-			uint [] _tokenIds,
-			uint [] _prices)
-		public whenNotPaused whenOrdersAllowed nonReentrant {
-
-		require(_tokenIds.length == _prices.length);
-
-		UniqxMarketContract storage marketContract = contracts[_contract];
-
-		require(marketContract.registered);
-		require(marketContract.ordersAllowed);
-
-		for(uint index=0; index<_tokenIds.length; index++) {
-
-			require(_prices[index] >= MIN_SELL_VALUE);
-
-			// token must not be published on the market
-			OrderInfo storage existingOrder = marketContract.orders[_tokenIds[index]];
-			require(existingOrder.status != OrderStatus.Created);
-
-			// make sure the maker is approved to sell this item
-			require(isSpenderApproved(_contract, msg.sender, _tokenIds[index]));
-
-			// take temporary custody of the token
-			ERC721Token token = ERC721Token(_contract);
-			address tokenOwner = token.ownerOf(_tokenIds[index]);
-			token.transferFrom(tokenOwner, address(this), _tokenIds[index]);
-
-			OrderInfo memory order = OrderInfo({
-					makePrice: _prices[index],
-					makeTime: now,
-					status: OrderStatus.Created,
-					maker: msg.sender,
-					owner: tokenOwner
-				});
-
-			marketContract.orders[_tokenIds[index]] = order;
+		address[] memory owners = new address[](tokenIds.length);
+		for(uint i = 0; i < tokenIds.length; i++) {
+			owners[i] = listTokenInternal(token, tokenInstance, tokenIds[i], buyPrices[i]);
 		}
 
-		emit LogOrdersCreated(_contract, _tokenIds);
+		emit LogTokensListed(
+			token,
+			tokenIds,
+			owners,
+			msg.sender,
+			buyPrices
+		);
 	}
 
-	function cancelOrders(address _contract, uint [] _tokenIds)
-	public whenNotPaused nonReentrant {
+	function buyTokens(
+		address token,
+		uint[] tokenIds
+	)
+		whenNotPaused
+		nonReentrant
+		public
+		payable
+	{
+		require(tokenIds.length > 0, "Array must have at least one entry");
 
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
 
-		for(uint index=0; index<_tokenIds.length; index++) {
-			OrderInfo storage order = marketContract.orders[_tokenIds[index]];
+		ERC721Token tokenInstance = ERC721Token(token);
 
-			// only the original maker can cancel
-			require(msg.sender == order.maker);
-
-			// token must still be published on the market
-			require(order.status == OrderStatus.Created);
-
-			// token must still be in temporary custody of the market
-			ERC721Token token = ERC721Token(_contract);
-			require(token.ownerOf(_tokenIds[index]) == address(this));
-
-			// transfer back to the original
-			token.transferFrom(address(this), order.owner, _tokenIds[index]);
-
-			//delete marketContract.orders[_tokenIds[index]];
-			marketContract.orders[_tokenIds[index]].status = OrderStatus.Cancelled;
-		}
-
-		emit LogOrdersCancelled(_contract, _tokenIds);
-	}
-
-	function changeOrders(address _contract, uint [] _tokenIds, uint [] _prices)
-	public whenNotPaused nonReentrant {
-
-		require(_tokenIds.length == _prices.length);
-
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
-
-		for(uint index=0; index<_tokenIds.length; index++) {
-			OrderInfo storage order = marketContract.orders[_tokenIds[index]];
-
-			// only the original maker can cancel
-			require(msg.sender == order.maker);
-
-			// token must still be published on the market
-			require(order.status == OrderStatus.Created);
-
-			// token must still be in temporary custody of the market
-			ERC721Token token = ERC721Token(_contract);
-			require(token.ownerOf(_tokenIds[index]) == address(this));
-
-			order.makePrice = _prices[index];
-		}
-
-		emit LogOrdersChanged(_contract, _tokenIds);
-	}
-
-	function takeOrders(address _contract, uint [] _tokenIds)
-	public payable whenNotPaused nonReentrant {
-
-		UniqxMarketContract storage marketContract = contracts[_contract];
-		require(marketContract.registered);
-
-		uint _ordersValue = msg.value;
-		for(uint index=0; index<_tokenIds.length; index++) {
-
-			OrderInfo storage order = marketContract.orders[_tokenIds[index]];
-
-			// token must still be published on the market
-			require(order.status == OrderStatus.Created);
-
-			// the amount of ETH forwarded is higher than make price
-			require(_ordersValue >= order.makePrice);
-
-			uint marketFee = order.makePrice.mul(marketFeeNum).div(marketFeeDen);
-			uint makerDue = order.makePrice.sub(marketFee);
-
-			_ordersValue = _ordersValue.sub(order.makePrice);
-
-			ERC721Token token = ERC721Token(_contract);
-			token.transferFrom(address(this), msg.sender, _tokenIds[index]);
-
-			MARKET_FEES_MSIG.transfer(marketFee);
-			order.maker.transfer(makerDue);
-
-			emit LogOrderAcquired(_contract, _tokenIds[index], order.makePrice, order.maker, msg.sender);
-
-			// delete marketContract.orders[_tokenIds[index]];
-			marketContract.orders[_tokenIds[index]].status = OrderStatus.Acquired;
+		uint ordersAmount = 0;
+		for(uint i = 0; i < tokenIds.length; i++) {
+			uint amount = buyTokenInternal(token, tokenInstance, tokenIds[i], ordersAmount);
+			ordersAmount = ordersAmount.add(amount);
 		}
 
 		// the bundled value should match the price of all orders
-		require(_ordersValue == 0);
+		require(ordersAmount == msg.value);
+
+		emit LogTokensSold(token, tokenIds, msg.sender);
+	}
+
+
+	// MC: isn't this better called cancelOrders ?
+	// Can we do a separate branch for renaming and involve Solo as well?
+	function cancelTokens(
+		address token,
+		uint[] tokenIds
+	)
+		whenNotPaused
+		nonReentrant
+		public
+	{
+		require(tokenIds.length > 0, "Array must have at least one entry");
+
+		TokenContract storage tokenContract = tokenContracts[token];
+		require(tokenContract.registered, "Token must be registered");
+
+		ERC721Token tokenInstance = ERC721Token(token);
+
+		for(uint i = 0; i < tokenIds.length; i++) {
+			cancelTokenInternal(token, tokenInstance, tokenIds[i]);
+		}
+
+		emit LogTokensCancelled(token, tokenIds);
+	}
+
+	/////////////////////////////////////// INTERNAL ////////////////////////////////////////
+	function orderExists(OrderInfo order)
+		private
+		pure
+		returns(bool listed)
+	{
+		return (order.owner != address(0x0));
+	}
+
+	// list token and return previous owner
+	function listTokenInternal(
+		address token,
+		ERC721Token tokenInstance,
+		uint tokenId,
+		uint buyPrice
+	)
+		private
+		returns(address _owner)
+	{
+		require(buyPrice > 0, "Price must be greater than zero");
+
+		OrderInfo storage order = orders[token][tokenId];
+		require(!orderExists(order), "Token must not be listed already");
+		require(isSpenderApproved(msg.sender, token , tokenId), "The seller must be allowed to sell the token");
+
+		// market will now escrow the token (owner and seller(if any) must approve the market before listing)
+		address owner = tokenInstance.ownerOf(tokenId);
+		tokenInstance.transferFrom(owner, address(this), tokenId);
+
+		OrderInfo memory newOrder = OrderInfo(
+			{
+			owner: owner,
+			buyPrice: buyPrice
+			}
+		);
+
+		orders[token][tokenId] = newOrder;
+
+		return owner;
+	}
+
+	function buyTokenInternal(
+		address token,
+		ERC721Token tokenInstance,
+		uint tokenId,
+		uint ordersAmount
+	)
+		private
+		returns(uint price)
+	{
+		OrderInfo storage order = orders[token][tokenId];
+		require(orderExists(order), "Token must be listed");
+
+		price = order.buyPrice;
+
+		require(msg.value >= ordersAmount + order.buyPrice, "The amount passed must cover the value of the tokens as listed");
+
+		// transfer fee to market
+		uint marketFee = order.buyPrice.mul(marketFeeNum).div(marketFeeDen);
+		MARKET_FEE_COLLECTOR.transfer(marketFee);
+
+		// transfer the rest to owner
+		uint ownerDue = order.buyPrice.sub(marketFee);
+		order.owner.transfer(ownerDue);
+
+		// transfer token to buyer
+		tokenInstance.transferFrom(address(this), msg.sender, tokenId);
+
+		delete orders[token][tokenId];
+	}
+
+	function cancelTokenInternal(
+		address token,
+		ERC721Token tokenInstance,
+		uint tokenId
+	)
+		private
+	{
+		OrderInfo storage order = orders[token][tokenId];
+		require(orderExists(order), "Token must be listed");
+
+		require(
+			order.owner == msg.sender
+			|| tokenInstance.getApproved(tokenId) == msg.sender
+			|| tokenInstance.isApprovedForAll(order.owner, msg.sender),
+			"Only the owner or the seller can cancel a token"
+		);
+
+		// transfer the token back to the owner
+		tokenInstance.transferFrom(address(this), order.owner, tokenId);
+
+		delete orders[token][tokenId];
 	}
 }

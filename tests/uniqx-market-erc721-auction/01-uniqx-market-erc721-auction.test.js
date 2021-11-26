@@ -1,12 +1,15 @@
 import {
 	accounts, assert, should, BigNumber, Bluebird, OrderStatus
 } from '../common/common';
+const moment = require('moment');
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
 import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
+import latestTime from "../../zeppelin/test/helpers/latestTime";
+import {duration} from "../../zeppelin/test/helpers/increaseTime";
 
 
-const UniqxMarketERC721 = artifacts.require('../../contracts/UniqxMarketERC721Instant.sol');
+const UniqxMarketERC721 = artifacts.require('../../contracts/UniqxMarketERC721Auction.sol');
 const erc721Token = artifacts.require("../../../adapt/contracts/AdaptCollectibles.sol");
 
 contract('testing allow/disallow orders - ', function (rpc_accounts) {
@@ -105,19 +108,26 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 	});
 
 	it('should be able to make orders by default', async () => {
-		await market.listTokens(
+		const threeDaysLater = moment().add(3, 'days').unix();
+
+		await market.listTokensAuction(
 			erc721Token1.address,
 			[ tokens1[0], tokens1[1], tokens1[2] ],
 			[ ether(1), ether(1), ether(1) ],
+			[ ether(0.1), ether(0.1), ether(0.1) ],
+			[ threeDaysLater, threeDaysLater, threeDaysLater ],
 			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
 		).should.be.fulfilled;
 
-		await market.listTokens(
+		await market.listTokensAuction(
 			erc721Token2.address,
-			[ tokens2[0], tokens2[1], tokens2[2] ],
+			[ tokens1[0], tokens1[1], tokens1[2] ],
 			[ ether(1), ether(1), ether(1) ],
+			[ ether(0.1), ether(0.1), ether(0.1) ],
+			[ threeDaysLater, threeDaysLater, threeDaysLater ],
 			{ from: ac.ADAPT_ADMIN , gas: 7000000 }
 		).should.be.fulfilled;
+
 	});
 
 	it('should be able to disallow orders per contract', async () => {
@@ -130,10 +140,14 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 	});
 
 	it('should not be able make orders for contract with orders disallowed', async () => {
-		await market.listTokens(
+		const oneDayLater = latestTime() + duration.days(1);
+
+		await market.listTokensAuction(
 			erc721Token1.address,
 			[ tokens1[3] ],
 			[ ether(1) ],
+			[ ether(0.1) ],
+			[ oneDayLater ],
 			{ from: ac.ADAPT_ADMIN, gas: 7000000 }
 		).should.be.rejectedWith(EVMRevert);
 	});
@@ -158,14 +172,19 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 		).should.be.fulfilled;
 
 		listed = await market.tokenIsListed(erc721Token1.address, tokens1[1]);
+		console.log('@@ Order status token 1', listed);
 		assert.equal(listed, false, 'Token should not be listed');
 	});
 
 	it('should be able make orders for other contracts with orders allowed', async () => {
-		await market.listTokens(
+		const oneDayLater = latestTime() + duration.days(1);
+
+		await market.listTokensAuction(
 			erc721Token2.address,
-			[ tokens2[3] ],
+			[ tokens1[3] ],
 			[ ether(1) ],
+			[ ether(0.1) ],
+			[ oneDayLater ],
 			{ from: ac.ADAPT_ADMIN, gas: 7000000 }
 		).should.be.fulfilled;
 	});
@@ -191,10 +210,14 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 	});
 
 	it('should be able make orders for contract with allowed orders', async () => {
-		await market.listTokens(
+		const oneDayLater = latestTime() + duration.days(1);
+
+		await market.listTokensAuction(
 			erc721Token1.address,
 			[ tokens1[3] ],
 			[ ether(1) ],
+			[ ether(0.1) ],
+			[ oneDayLater ],
 			{ from: ac.ADAPT_ADMIN, gas: 7000000 }
 		).should.be.fulfilled;
 	});
@@ -207,20 +230,25 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 	});
 
 	it('should not be able make orders for any contracts when orders are disallowed globally', async () => {
-		await market.listTokens(
+		const oneDayLater = latestTime() + duration.days(1);
+
+		await market.listTokensAuction(
 			erc721Token1.address,
 			[ tokens1[4] ],
 			[ ether(1) ],
+			[ ether(0.1) ],
+			[ oneDayLater ],
 			{ from: ac.ADAPT_ADMIN, gas: 7000000 }
 		).should.be.rejectedWith(EVMRevert);
 
-		await market.listTokens(
+		await market.listTokensAuction(
 			erc721Token2.address,
-			[ tokens2[4] ],
+			[ tokens1[4] ],
 			[ ether(1) ],
+			[ ether(0.1) ],
+			[ oneDayLater ],
 			{ from: ac.ADAPT_ADMIN, gas: 7000000 }
 		).should.be.rejectedWith(EVMRevert);
-
 	});
 
 	it('should be able take/cancel orders for contract when orders are disallowed globally', async () => {
@@ -249,3 +277,5 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 		).should.be.fulfilled;
 	});
 });
+
+

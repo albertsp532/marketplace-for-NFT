@@ -1,5 +1,5 @@
 import {
-	accounts, assert, should, BigNumber, Bluebird, parseAdaptTokenEvent, parseUnixMarketEvent, parseAdaptMarketEvent, OrderStatus
+	accounts, assert, should, BigNumber, Bluebird, parseAdaptMarketEvent, OrderStatus
 } from '../common/common';
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
