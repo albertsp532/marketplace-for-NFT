@@ -49,6 +49,16 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 		_;
 	}
 
+	modifier canBeStoredWith64Bits(uint256 _value) {
+		require(_value <= 18446744073709551615);
+		_;
+	}
+
+	modifier canBeStoredWith128Bits(uint256 _value) {
+		require(_value < 340282366920938463463374607431768211455);
+		_;
+	}
+
 	/////////////////////////////////////// PUBLIC //////////////////////////////////////////
 	function setMarketFee(uint _marketFeeNum, uint _marketFeeDen)
 		onlyOwner

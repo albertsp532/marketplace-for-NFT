@@ -13,12 +13,12 @@ contract MarketUniqxAuction is MarketUniqxBase
 
 	/////////////////////////////////////// TYPES ///////////////////////////////////////////
 	struct OrderInfo {
-		address owner; 		// the user who owns the token sold via this order
-		uint buyPrice;		// holds the 'buy it now' price
-		address buyer;		// holds the highest bidder
-		uint startPrice; 	// holds the start price of an auction
-		uint endTime;		// holds the time when the auction ends
-		uint highestBid; 	// holds the highest bid at any given time
+		address owner; 		    // the user who owns the token sold via this order
+		uint128 buyPrice;		// holds the 'buy it now' price
+		address buyer;		    // holds the highest bidder
+		uint128 startPrice; 	// holds the start price of an auction
+		uint64 endTime;		    // holds the time when the auction ends
+		uint128 highestBid; 	// holds the highest bid at any given time
 	}
 
 	/////////////////////////////////////// EVENTS //////////////////////////////////////////
@@ -127,9 +127,6 @@ contract MarketUniqxAuction is MarketUniqxBase
 		nonReentrant
 		public
 	{
-		TokenContract storage tokenContract = tokenContracts[token];
-		require(tokenContract.registered, "Token must be registered");
-		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
 
 		ERC721Token tokenInstance = ERC721Token(token);
 		address owner = _create(token, tokenInstance, tokenId, buyPrice, startPrice, endTime);
@@ -363,11 +360,12 @@ contract MarketUniqxAuction is MarketUniqxBase
 			if (order.highestBid > 0) {
 
 				// transfer fee to market
-				uint marketFee = order.highestBid.mul(marketFeeNum).div(marketFeeDen);
+				uint marketFee = order.highestBid / marketFeeDen * marketFeeNum;
 				MARKET_FEE_COLLECTOR.transfer(marketFee);
 
 				// transfer the rest of the amount to the owner
-				uint ownerDue = order.highestBid.sub(marketFee);
+				require(order.highestBid > marketFee);
+				uint ownerDue = order.highestBid - marketFee;
 				order.owner.transfer(ownerDue);
 
 				// transfer token to the highest bidder
@@ -408,6 +406,9 @@ contract MarketUniqxAuction is MarketUniqxBase
 		uint endTime
 	)
 		private
+		canBeStoredWith128Bits(startPrice)
+		canBeStoredWith128Bits(buyPrice)
+		canBeStoredWith64Bits(endTime)
 		returns (address _owner)
 	{
 		OrderInfo storage order = orders[token][tokenId];
@@ -424,11 +425,11 @@ contract MarketUniqxAuction is MarketUniqxBase
 		OrderInfo memory newOrder = OrderInfo(
 			{
 				owner: owner,
-				buyPrice: buyPrice,
+				buyPrice: uint128(buyPrice),
 				buyer: address(0),
-				startPrice: startPrice,
-				endTime: endTime,
-				highestBid: 0
+				startPrice: uint128(startPrice),
+				endTime: uint64(endTime),
+				highestBid: uint128(0)
 			}
 		);
 
@@ -445,6 +446,9 @@ contract MarketUniqxAuction is MarketUniqxBase
 		uint newStartPrice,
 		uint newEndTime
 	)
+		canBeStoredWith128Bits(newStartPrice)
+		canBeStoredWith128Bits(newBuyPrice)
+		canBeStoredWith64Bits(newEndTime)
 		private
 	{
 		OrderInfo storage order = orders[token][tokenId];
@@ -463,9 +467,9 @@ contract MarketUniqxAuction is MarketUniqxBase
 		require(newStartPrice <= newBuyPrice, "Start price must be less than or equal to the buy price");
 		require(newEndTime > now + AUCTION_MIN_DURATION, "A minimum auction duration is enforced by the market");
 
-		order.buyPrice      = newBuyPrice;
-		order.startPrice    = newStartPrice;
-		order.endTime       = newEndTime;
+		order.buyPrice      = uint128(newBuyPrice);
+		order.startPrice    = uint128(newStartPrice);
+		order.endTime       = uint64(newEndTime);
 	}
 
 	function _bid(
@@ -474,6 +478,7 @@ contract MarketUniqxAuction is MarketUniqxBase
 		uint tokenId,
 		uint bidAmount
 	)
+		canBeStoredWith128Bits(bidAmount)
 		private
 	{
 		OrderInfo storage order = orders[token][tokenId];
@@ -489,7 +494,7 @@ contract MarketUniqxAuction is MarketUniqxBase
 			order.buyer.transfer(order.highestBid);
 		}
 
-		order.highestBid = bidAmount;
+		order.highestBid = uint128(bidAmount);
 		order.buyer = msg.sender;
 
 		emit LogBid(token, tokenId, order.buyer, order.highestBid);
@@ -498,11 +503,12 @@ contract MarketUniqxAuction is MarketUniqxBase
 		if (bidAmount == order.buyPrice) {
 
 			// transfer fee to market
-			uint marketFee = order.highestBid.mul(marketFeeNum).div(marketFeeDen);
+			uint marketFee = order.highestBid / marketFeeDen * marketFeeNum;
 			MARKET_FEE_COLLECTOR.transfer(marketFee);
 
 			// transfer the rest of the amount to the owner
-			uint ownerDue = order.highestBid.sub(marketFee);
+			require(order.highestBid > marketFee);
+			uint ownerDue = order.highestBid - marketFee;
 			order.owner.transfer(ownerDue);
 
 			// transfer token to buyer which is the same with sender and buyer
