@@ -62,24 +62,24 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 	/////////////////////////////////////// PUBLIC //////////////////////////////////////////
 	function setMarketFee(uint _marketFeeNum, uint _marketFeeDen)
 		onlyOwner
-		public
-	{
+		public {
+
 		marketFeeNum = _marketFeeNum;
 		marketFeeDen = _marketFeeDen;
 	}
 
 	function setMarketFeeCollector(address _marketFeeCollector)
 		onlyOwner
-		public
-	{
+		public {
+
 		MARKET_FEE_COLLECTOR = _marketFeeCollector;
 	}
 
 	function enableOrders()
 		onlyOwner
 		whenOrdersDisabled
-		public
-	{
+		public {
+
 		ORDERS_ENABLED = true;
 		emit LogEnableOrders();
 	}
@@ -87,24 +87,22 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 	function disableOrders()
 		onlyOwner
 		whenOrdersEnabled
-		public
-	{
+		public {
+
 		ORDERS_ENABLED = false;
 		emit LogDisableOrders();
 	}
 
 	function registerToken(address token)
 		onlyOwner
-		public
-	{
+		public {
+
 		require(!tokenContracts[token].registered, "Token should not be registered already");
 
-		TokenContract memory tokenContract = TokenContract(
-			{
+		TokenContract memory tokenContract = TokenContract({
 			registered: true,
 			ordersEnabled: true
-			}
-		);
+		});
 
 		tokenContracts[token] = tokenContract;
 		emit LogRegisterToken(token);
@@ -113,8 +111,8 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 	function getTokenContractStatus(address token)
 		public
 		view
-		returns(bool registered, bool ordersEnabled)
-	{
+		returns(bool registered, bool ordersEnabled) {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		registered = tokenContract.registered;
 		ordersEnabled = tokenContract.ordersEnabled;
@@ -122,8 +120,8 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 
 	function enableTokenOrders(address token)
 		onlyOwner
-		public
-	{
+		public {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 
 		require(tokenContract.registered, "Token must be registered");
@@ -135,8 +133,8 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 
 	function disableTokenOrders(address token)
 		onlyOwner
-		public
-	{
+		public {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 
 		require(tokenContract.registered, "Token must be registered");
@@ -151,16 +149,18 @@ contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
 	function isSpenderApproved(address spender, address token, uint256 tokenId)
 		internal
 		view
-		returns (bool)
-	{
+		returns (bool) {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 
 		ERC721Token tokenInstance = ERC721Token(token);
 		address owner = tokenInstance.ownerOf(tokenId);
 
-		return (spender == owner
-				|| tokenInstance.getApproved(tokenId) == spender
-				|| tokenInstance.isApprovedForAll(owner, spender));
+		return (
+			spender == owner ||
+			tokenInstance.getApproved(tokenId) == spender ||
+			tokenInstance.isApprovedForAll(owner, spender)
+		);
 	}
 }

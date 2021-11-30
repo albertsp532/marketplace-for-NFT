@@ -4,7 +4,7 @@ import {
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
 import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
-import latestTime from '../../zeppelin/test/helpers/latestTime';
+import latestTime from '../helpers/latestTime';
 import { duration, increaseTimeTo } from '../../zeppelin/test/helpers/increaseTime';
 import * as abiDecoder from 'abi-decoder';
 

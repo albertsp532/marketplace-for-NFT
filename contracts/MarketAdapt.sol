@@ -140,7 +140,7 @@ contract MarketAdapt is NoOwner, Pausable, ReentrancyGuard {
 
 			require(isSpenderApproved(msg.sender, tokenIds[i]), "The seller must be allowed to sell the token");
 
-			// market will now escrow the token (owner or seller must approve unix market before listing)
+			// market will now escrow the token (owner or seller must approve uniqx market before listing)
 			address tokenOwner = ADAPT_TOKEN.ownerOf(tokenIds[i]);
 			ADAPT_TOKEN.transferFrom(tokenOwner, address(this), tokenIds[i]);
 			owners[i] = tokenOwner;

@@ -5,7 +5,7 @@ const moment = require('moment');
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
 import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
-import latestTime from "../../zeppelin/test/helpers/latestTime";
+import latestTime from '../helpers/latestTime';
 import {duration} from "../../zeppelin/test/helpers/increaseTime";
 
 const TokenAdapt = artifacts.require("../../../adapt/contracts/AdaptCollectibles.sol");

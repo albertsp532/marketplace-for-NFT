@@ -12,7 +12,7 @@ import expectEvent from "../helpers/expectEvent";
 const moment = require('moment');
 import EVMRevert from "../../zeppelin/test/helpers/EVMRevert";
 import { duration, increaseTimeTo } from '../../zeppelin/test/helpers/increaseTime';
-import latestTime from '../../zeppelin/test/helpers/latestTime';
+import latestTime from '../helpers/latestTime';
 
 const TokenAdapt = artifacts.require("../../../adapt/contracts/AdaptCollectibles.sol");
 const MarketUniqxAuction = artifacts.require('../../contracts/MarketUniqxAuction.sol');

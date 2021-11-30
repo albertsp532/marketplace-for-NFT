@@ -60,8 +60,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 	function getOrderInfo(address token, uint tokenId)
 		public
 		view
-		returns (address owner, uint buyPrice)
-	{
+		returns (address owner, uint buyPrice) {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 
@@ -74,8 +74,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 	function tokenIsListed(address token, uint tokenId)
 		public
 		view
-		returns(bool listed)
-	{
+		returns(bool listed) {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 
@@ -92,8 +92,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		whenOrdersEnabled
 		nonReentrant
-		public
-	{
+		public {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
@@ -119,8 +119,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		whenOrdersEnabled
 		nonReentrant
-		public
-	{
+		public {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
@@ -143,8 +143,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		nonReentrant
 		public
-		payable
-	{
+		payable {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 
@@ -163,8 +163,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 	)
 		whenNotPaused
 		nonReentrant
-		public
-	{
+		public {
+
 		TokenContract storage tokenContract = tokenContracts[token];
 		require(tokenContract.registered, "Token must be registered");
 
@@ -183,8 +183,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		whenOrdersEnabled
 		nonReentrant
-		public
-	{
+		public {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 		require(tokenIds.length == buyPrices.length, "Array lengths must match");
 
@@ -216,8 +216,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		whenOrdersEnabled
 		nonReentrant
-		public
-	{
+		public {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 		require(tokenIds.length == newPrices.length, "Array lengths must match");
 
@@ -245,8 +245,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		whenNotPaused
 		nonReentrant
 		public
-		payable
-	{
+		payable {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 
 		TokenContract storage tokenContract = tokenContracts[token];
@@ -272,8 +272,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 	)
 		whenNotPaused
 		nonReentrant
-		public
-	{
+		public {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 
 		TokenContract storage tokenContract = tokenContracts[token];
@@ -292,8 +292,8 @@ contract MarketUniqxInstant is MarketUniqxBase {
 	function orderExists(OrderInfo order)
 		private
 		pure
-		returns(bool listed)
-	{
+		returns(bool listed) {
+
 		return (order.owner != address(0x0));
 	}
 
@@ -305,27 +305,34 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		uint buyPrice
 	)
 		private
-		returns(address _owner)
-	{
-		require(buyPrice > 0, "Price must be greater than zero");
+		returns(address _owner) {
+
+		require(
+			buyPrice > 0,
+			"Price must be greater than zero"
+		);
 
 		OrderInfo storage order = orders[token][tokenId];
-		require(!orderExists(order), "Token must not be listed already");
-		require(isSpenderApproved(msg.sender, token , tokenId), "The seller must be allowed to sell the token");
+		require(
+			!orderExists(order),
+			"Token must not be listed already"
+		);
+
+		require(
+			isSpenderApproved(msg.sender, token , tokenId),
+			"The seller must be allowed to sell the token"
+		);
 
 		// market will now escrow the token (owner and seller(if any) must approve the market before listing)
 		address owner = tokenInstance.ownerOf(tokenId);
 		tokenInstance.transferFrom(owner, address(this), tokenId);
 
-		OrderInfo memory newOrder = OrderInfo(
-			{
-				owner: owner,
-				buyPrice: buyPrice
-			}
-		);
+		OrderInfo memory newOrder = OrderInfo( {
+			owner: owner,
+			buyPrice: buyPrice
+		});
 
 		orders[token][tokenId] = newOrder;
-
 		return owner;
 	}
 
@@ -335,20 +342,21 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		uint tokenId,
 		uint newPrice
 	)
-		private
-	{
+		private {
+
 		OrderInfo storage order = orders[token][tokenId];
 		require(orderExists(order), "Token must be listed");
 
 		require(
-			order.owner == msg.sender
-			|| tokenInstance.getApproved(tokenId) == msg.sender
-			|| tokenInstance.isApprovedForAll(order.owner, msg.sender),
+			order.owner == msg.sender ||
+			tokenInstance.isApprovedForAll(order.owner, msg.sender),
 			"Only the owner or the seller can update a token"
 		);
 
-		require(newPrice > 0, "The new price must be greater than zero");
-
+		require(
+			newPrice > 0,
+			"The new price must be greater than zero"
+		);
 		order.buyPrice = newPrice;
 	}
 
@@ -359,14 +367,16 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		uint ordersAmount
 	)
 		private
-		returns(uint price)
-	{
+		returns(uint price) {
+
 		OrderInfo storage order = orders[token][tokenId];
 		require(orderExists(order), "Token must be listed");
 
 		price = order.buyPrice;
-
-		require(msg.value >= ordersAmount + order.buyPrice, "The amount passed must cover the value of the tokens as listed");
+		require(
+			msg.value >= ordersAmount + order.buyPrice,
+			"The amount passed must cover the value of the tokens as listed"
+		);
 
 		// transfer fee to market
 		uint marketFee = order.buyPrice.mul(marketFeeNum).div(marketFeeDen);
@@ -378,7 +388,6 @@ contract MarketUniqxInstant is MarketUniqxBase {
 
 		// transfer token to buyer
 		tokenInstance.transferFrom(address(this), msg.sender, tokenId);
-
 		delete orders[token][tokenId];
 	}
 
@@ -387,21 +396,19 @@ contract MarketUniqxInstant is MarketUniqxBase {
 		ERC721Token tokenInstance,
 		uint tokenId
 	)
-		private
-	{
+		private {
+
 		OrderInfo storage order = orders[token][tokenId];
 		require(orderExists(order), "Token must be listed");
 
 		require(
-			order.owner == msg.sender
-			|| tokenInstance.getApproved(tokenId) == msg.sender
-			|| tokenInstance.isApprovedForAll(order.owner, msg.sender),
+			order.owner == msg.sender ||
+			tokenInstance.isApprovedForAll(order.owner, msg.sender),
 			"Only the owner or the seller can cancel a token"
 		);
 
 		// transfer the token back to the owner
 		tokenInstance.transferFrom(address(this), order.owner, tokenId);
-
 		delete orders[token][tokenId];
 	}
 }
