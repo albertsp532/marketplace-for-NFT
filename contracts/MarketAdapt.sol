@@ -1,18 +1,19 @@
 pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/NoOwner.sol";
+import "../zeppelin/contracts/ownership/HasNoTokens.sol";
+import "../zeppelin/contracts/ownership/HasNoContracts.sol";
 import "../zeppelin/contracts/lifecycle/Pausable.sol";
 import "../zeppelin/contracts/ReentrancyGuard.sol";
 import "../zeppelin/contracts/token/ERC721/ERC721BasicToken.sol";
 import { SafeMath } from "../zeppelin/contracts/math/SafeMath.sol";
 import { AdaptCollectibles } from "../adapt/contracts/AdaptCollectibles.sol";
 
-contract MarketAdapt is NoOwner, Pausable, ReentrancyGuard {
+contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 
 	using SafeMath for uint;
 
 	// constants
-	uint public constant RESERVATION_TIME 	= 3 days;
+	uint public constant RESERVATION_TIME 	= 7 days;
 	uint public constant MIN_DONATION 		= 10000000000000 wei;
 	uint public constant MARKET_FEE_NUM 	= 4;
 	uint public constant MARKET_FEE_DEN 	= 100;

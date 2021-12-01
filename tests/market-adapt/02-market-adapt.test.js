@@ -153,8 +153,8 @@ contract('Adapt Market - test logging', function (rpc_accounts) {
 	});
 
 	it('BUYER3 should be able to donate for a token reserved for BUYER2 after the reservation expires', async () => {
-		const threeDaysLater = latestTime() + duration.days(3);
-		increaseTimeTo(threeDaysLater + duration.minutes(1));
+		const sevenDaysLater = latestTime() + duration.days(7);
+		increaseTimeTo(sevenDaysLater + duration.minutes(1));
 
 		await market.buy(
 			tokens[4],

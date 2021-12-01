@@ -149,6 +149,9 @@ contract('Testing buy now - many', async function (rpc_accounts) {
 		const ownerBalanceBefore = await getBalanceAsync(ac.ADAPT_ADMIN);
 		const marketBalanceBefore = await getBalanceAsync(ac.MARKET_FEES_MSIG);
 
+		console.log(`ownerBalanceBefore: ${ownerBalanceBefore.toString(10)}`);
+		console.log(`marketBalanceBefore: ${marketBalanceBefore.toString(10)}`);
+
 		const priceToPay = new BigNumber(ether(10));
 
 		const ret = await market.bidMany(
@@ -162,20 +165,24 @@ contract('Testing buy now - many', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		console.log(`GAS - Buy 10 adapt tokens: ${ret.receipt.gasUsed}`);
-
 		expectEvent.inLogs(ret.logs, 'LogBidMany');
 		expectEvent.inLogs(ret.logs, 'LogBuy');
 
 		// TODO: get these from contract
 		const marketFee = priceToPay.dividedToIntegerBy(100);
-		const ownerDue = priceToPay - marketFee;
+		const ownerDue = priceToPay.minus(marketFee);
 
-		const marketBalanceAfter = await getBalanceAsync(ac.MARKET_FEES_MSIG);
+		console.log(`ownerDue: ${ownerDue}`);
+		console.log(`marketFee: ${marketFee}`);
+
 		const ownerBalanceAfter = await getBalanceAsync(ac.ADAPT_ADMIN);
+		const marketBalanceAfter = await getBalanceAsync(ac.MARKET_FEES_MSIG);
 
-		marketBalanceAfter.should.be.bignumber.equal(marketBalanceBefore.plus(marketFee));
+		console.log(`ownerBalanceAfter: ${ownerBalanceAfter.toString(10)}`);
+		console.log(`marketBalanceAfter: ${marketBalanceAfter.toString(10)}`);
+
 		ownerBalanceAfter.should.be.bignumber.equal(ownerBalanceBefore.plus(ownerDue));
+		marketBalanceAfter.should.be.bignumber.equal(marketBalanceBefore.plus(marketFee));
 
 		for (let token of tokens) {
 			assert.equal(await tokenAdapt.ownerOf(token), ac.BUYER1, 'unexpected owner  - should be buyer1');

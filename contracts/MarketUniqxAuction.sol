@@ -555,7 +555,7 @@ contract MarketUniqxAuction is MarketUniqxBase
 		if (bidAmount == order.buyPrice) {
 
 			// transfer fee to market
-			uint marketFee = order.highestBid.mul(marketFeeNum).sub(marketFeeDen);
+			uint marketFee = order.highestBid.mul(marketFeeNum).div(marketFeeDen);
 			MARKET_FEE_COLLECTOR.transfer(marketFee);
 
 			// transfer the rest of the amount to the owner

@@ -1,12 +1,13 @@
 pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/NoOwner.sol";
+import "../zeppelin/contracts/ownership/HasNoTokens.sol";
+import "../zeppelin/contracts/ownership/HasNoContracts.sol";
 import "../zeppelin/contracts/lifecycle/Pausable.sol";
 import "../zeppelin/contracts/ReentrancyGuard.sol";
 import {SafeMath} from "../zeppelin/contracts/math/SafeMath.sol";
 import {ERC721Token} from "../zeppelin/contracts/token/ERC721/ERC721Token.sol";
 
-contract MarketUniqxBase is NoOwner, Pausable, ReentrancyGuard {
+contract MarketUniqxBase is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 
 	using SafeMath for uint;
 

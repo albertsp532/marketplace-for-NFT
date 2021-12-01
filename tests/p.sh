@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="${SCRIPT_DIR}/.."
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -31,12 +31,12 @@ else
 fi
 
 for TEST_FILE in ${TESTS[@]} ; do
-  if [[ $TEST_FILE != ${TESTS[0]} ]]; then
+  if [[ ${TEST_FILE} != ${TESTS[0]} ]]; then
     echo "Running test RPC"
     ${ROOT_DIR}/testrpc.sh >/dev/null 2>&1 &
   fi
 
-  ${trf} test $TEST_FILE
+  ${trf} test ${TEST_FILE}
   RESULT=$?
 
   pgrep -f "node_modules/.bin/testrpc" | xargs kill -9
