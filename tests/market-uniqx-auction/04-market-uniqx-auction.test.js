@@ -1,5 +1,8 @@
 import {
-	accounts, assert, BigNumber, getBalanceAsync, getBalanceAsyncStr, parseAdaptTokenEvent
+	accounts,
+	assert,
+	BigNumber,
+	getBalanceAsync
 } from '../common/common';
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
@@ -165,7 +168,7 @@ contract('Testing buy now - many', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 		expectEvent.inLogs(ret.logs, 'LogBuy');
 
 		// TODO: get these from contract

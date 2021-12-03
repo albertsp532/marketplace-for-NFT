@@ -49,7 +49,11 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 		address[] owners,
 		address seller
 	);
-	event LogBuy(uint tokenId, address buyer, uint price);
+	event LogBuy(
+		uint tokenId,
+		address buyer,
+		uint price
+	);
 	event LogCancelMany(uint[] tokens);
 
 	// entry point
@@ -77,8 +81,8 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 			uint _buyPrice,
 			uint _listedAt,
 			address _seller
-		)
-	{
+	){
+
 		OrderInfo storage order = orders[_tokenId];
 		_status = order.status;
 		_buyPrice = order.buyPrice;
@@ -98,10 +102,9 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 	)
 		internal
 		view
-		returns (bool)
-	{
-		address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenId);
+		returns (bool) {
 
+		address tokenOwner = ADAPT_TOKEN.ownerOf(_tokenId);
 		return (
 			_spender == tokenOwner
 			|| ADAPT_TOKEN.getApproved(_tokenId) == _spender
@@ -116,12 +119,11 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 	)
 		public
 		whenNotPaused
-		nonReentrant
-	{
+		nonReentrant {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 		require(tokenIds.length == buyPrices.length, "Array lengths must match");
 		require(tokenIds.length == _reservations.length, "Array lengths must match");
-
 		address[] memory owners = new address[](buyPrices.length);
 
 		for(uint i = 0; i < tokenIds.length; i++) {
@@ -146,15 +148,13 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 			ADAPT_TOKEN.transferFrom(tokenOwner, address(this), tokenIds[i]);
 			owners[i] = tokenOwner;
 
-			OrderInfo memory order = OrderInfo(
-				{
-					buyPrice: buyPrices[i],
-					listedAt: now,
-					status: OrderStatus.Listed,
-					seller: msg.sender,
-					owner: tokenOwner
-				}
-			);
+			OrderInfo memory order = OrderInfo({
+				buyPrice: buyPrices[i],
+				listedAt: now,
+				status: OrderStatus.Listed,
+				seller: msg.sender,
+				owner: tokenOwner
+			});
 
 			if(_reservations[i] != address(0x0)) {
 				reservations[tokenIds[i]] = _reservations[i];
@@ -170,8 +170,8 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 	function cancelMany(uint[] tokenIds)
 		public
 		whenNotPaused
-		nonReentrant
-	{
+		nonReentrant {
+
 		require(tokenIds.length > 0, "Array must have at least one entry");
 
 		for(uint i=0; i < tokenIds.length; i++) {
@@ -202,10 +202,9 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 		public
 		payable
 		whenNotPaused
-		nonReentrant
-	{
-		require(tokenIds.length > 0, "Array must have at least one entry");
+		nonReentrant {
 
+		require(tokenIds.length > 0, "Array must have at least one entry");
 		uint amountLeft = msg.value;
 
 		for(uint i = 0; i < tokenIds.length; i++) {
@@ -221,8 +220,8 @@ contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
 		public
 		payable
 		whenNotPaused
-		nonReentrant
-	{
+		nonReentrant {
+
 		_buy(tokenId, msg.value);
 	}
 

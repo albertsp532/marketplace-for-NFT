@@ -4,8 +4,8 @@ import {SafeMath} from "../zeppelin/contracts/math/SafeMath.sol";
 import {ERC721Token} from "../zeppelin/contracts/token/ERC721/ERC721Token.sol";
 import {MarketUniqxBase} from "./MarketUniqxBase.sol";
 
-contract MarketUniqxAuction is MarketUniqxBase
-{
+contract MarketUniqxAuction is MarketUniqxBase {
+
 	using SafeMath for uint;
 	using SafeMath for uint128;
 	using SafeMath for uint64;
@@ -65,13 +65,6 @@ contract MarketUniqxAuction is MarketUniqxBase
 		uint tokenId,
 		address bidder,
 		uint bid
-	);
-
-	event LogBidMany(
-		address token,
-		uint[] tokenIds,
-		address bidder,
-		uint[] bids
 	);
 
 	event LogRetake(
@@ -216,8 +209,6 @@ contract MarketUniqxAuction is MarketUniqxBase
 			tokenId,
 			msg.value
 		);
-
-		emit LogBid(token, tokenId, msg.sender, msg.value);
 	}
 
 	function cancel(
@@ -361,7 +352,6 @@ contract MarketUniqxAuction is MarketUniqxBase
 			bidRunningSum == msg.value,
 			"The amount passed must match the sum of the bids"
 		);
-		emit LogBidMany(token, tokenIds, msg.sender, bids);
 	}
 
 	function cancelMany(

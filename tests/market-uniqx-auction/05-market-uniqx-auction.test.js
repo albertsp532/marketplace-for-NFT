@@ -3,9 +3,6 @@ import {
 	assert,
 	BigNumber,
 	OrderStatus,
-	getBalanceAsync,
-	getBalanceAsyncStr,
-	parseAdaptTokenEvent
 } from '../common/common';
 import ether from "../helpers/ether";
 import expectEvent from "../helpers/expectEvent";
@@ -226,7 +223,7 @@ contract('Testing auction functionality', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 
 		const info = await market.getOrderInfo(tokenAdapt.address, tokens[1]);
 		console.log(`order info: ${JSON.stringify(info, null, '\t')}`);
@@ -290,7 +287,7 @@ contract('Testing auction functionality', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 
 		const info = await market.getOrderInfo(tokenAdapt.address, tokens[1]);
 		console.log(`order info: ${JSON.stringify(info, null, '\t')}`);
@@ -313,7 +310,7 @@ contract('Testing auction functionality', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 
 		const info = await market.getOrderInfo(tokenAdapt.address, tokens[1]);
 		console.log(`order info: ${JSON.stringify(info, null, '\t')}`);
@@ -337,7 +334,7 @@ contract('Testing auction functionality', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 		expectEvent.inLogs(ret.logs, 'LogBuy');
 
 		const owner = await tokenAdapt.ownerOf(tokens[1]);
@@ -379,7 +376,7 @@ contract('Testing auction functionality', async function (rpc_accounts) {
 			}
 		).should.be.fulfilled;
 
-		expectEvent.inLogs(ret.logs, 'LogBidMany');
+		expectEvent.inLogs(ret.logs, 'LogBid');
 
 		let info = await market.getOrderInfo(tokenAdapt.address, tokens[2]);
 		let highestBid = new BigNumber(info[5]);
