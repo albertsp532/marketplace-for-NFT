@@ -3,8 +3,15 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 evm="node ${SCRIPT_DIR}/node_modules/.bin/testrpc-sc"
 
+if [ "$SOLIDITY_COVERAGE" = true ]; then
+    ganache_port=8555
+else
+    ganache_port=8545
+fi
+
 ${evm} \
---gasLimit=7000000 \
+--gasLimit 0xfffffffffff \
+--port "$ganache_port" \
 --account="0x2ad3f76904f48230b7ff160076332dc9f14a737036886758bcec129969640269,99999000000000000000000" \
 --account="0x068d3e1d77f8b723d13ffe7ff40dc809bf27914f028fb10d959ee282b18084e1,99999000000000000000000" \
 --account="0x301954e37e87530fd1183c6342d80788b49d224a7a8d9f891d47cdd39639d573,99999000000000000000000" \

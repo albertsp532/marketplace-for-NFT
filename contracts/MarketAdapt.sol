@@ -1,14 +1,12 @@
 pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/HasNoTokens.sol";
-import "../zeppelin/contracts/ownership/HasNoContracts.sol";
-import "../zeppelin/contracts/lifecycle/Pausable.sol";
-import "../zeppelin/contracts/ReentrancyGuard.sol";
-import "../zeppelin/contracts/token/ERC721/ERC721BasicToken.sol";
-import { SafeMath } from "../zeppelin/contracts/math/SafeMath.sol";
-import { AdaptCollectibles } from "../adapt/contracts/AdaptCollectibles.sol";
+import {Pausable} from "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
+import {ReentrancyGuard} from "openzeppelin-solidity/contracts/ReentrancyGuard.sol";
+import {ERC721BasicToken} from "openzeppelin-solidity/contracts/token/ERC721/ERC721BasicToken.sol";
+import {SafeMath} from "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import {AdaptCollectibles} from "../adapt/contracts/AdaptCollectibles.sol";
 
-contract MarketAdapt is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
+contract MarketAdapt is Pausable, ReentrancyGuard {
 
 	using SafeMath for uint;
 

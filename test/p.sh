@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="${SCRIPT_DIR}/.."
+if [ "$SOLIDITY_COVERAGE" = true ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+    ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. && pwd)"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+fi
+
+echo "script dir $SCRIPT_DIR root dir $ROOT_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m'
-
-MOCKS_SOL="${ROOT_DIR}/contracts/MockInclude.sol"
-MOCKS_BAK="${ROOT_DIR}/contracts/MockInclude.sol.bak"
-if [ -f ${MOCKS_SOL} ]; then
-	mv ${MOCKS_SOL} ${MOCKS_BAK}
-fi
 
 trf="node ${ROOT_DIR}/node_modules/.bin/truffle"
 
@@ -31,12 +32,12 @@ else
 fi
 
 for TEST_FILE in ${TESTS[@]} ; do
-  if [[ $TEST_FILE != ${TESTS[0]} ]]; then
-    echo "Running test RPC"
+  if [[ ${TEST_FILE} != ${TESTS[0]} ]]; then
+    echo "Running test RPC from  ${ROOT_DIR}/testrpc.sh"
     ${ROOT_DIR}/testrpc.sh >/dev/null 2>&1 &
   fi
 
-  ${trf} test $TEST_FILE
+  ${trf} test --network development ${TEST_FILE}
   RESULT=$?
 
   pgrep -f "node_modules/.bin/testrpc" | xargs kill -9
@@ -47,9 +48,6 @@ for TEST_FILE in ${TESTS[@]} ; do
     printf "${RED}\xE2\x9D\x8C $TEST_FILE${NC}\n"
   fi
 
-  if [ -f ${MOCKS_BAK} ]; then
-	  mv ${MOCKS_BAK} ${MOCKS_SOL}
-  fi
 done
 
 

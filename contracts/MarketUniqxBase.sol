@@ -1,52 +1,58 @@
 pragma solidity ^0.4.24;
 
-import "../zeppelin/contracts/ownership/HasNoTokens.sol";
-import "../zeppelin/contracts/ownership/HasNoContracts.sol";
-import "../zeppelin/contracts/lifecycle/Pausable.sol";
-import "../zeppelin/contracts/ReentrancyGuard.sol";
-import {SafeMath} from "../zeppelin/contracts/math/SafeMath.sol";
-import {ERC721Token} from "../zeppelin/contracts/token/ERC721/ERC721Token.sol";
+import {Pausable} from "openzeppelin-solidity/contracts/lifecycle/Pausable.sol";
+import {ReentrancyGuard} from "openzeppelin-solidity/contracts/ReentrancyGuard.sol";
+import {SafeMath} from "openzeppelin-solidity/contracts/math/SafeMath.sol";
+import {ERC721Token} from "openzeppelin-solidity/contracts/token/ERC721/ERC721Token.sol";
 
-contract MarketUniqxBase is Pausable, ReentrancyGuard, HasNoTokens, HasNoContracts {
+contract MarketUniqxBase is Pausable, ReentrancyGuard {
 
 	using SafeMath for uint;
 
-	/////////////////////////////////////// TYPES ///////////////////////////////////////////
-	struct TokenContract {
+	//------------------------------------- TYPES -------------------------------------------
+	struct TokenFlags {
 		bool registered;
 		bool ordersEnabled;
 	}
 
-	/////////////////////////////////////// EVENTS //////////////////////////////////////////
+	//------------------------------------- EVENTS ------------------------------------------
 	event LogEnableOrders();
 	event LogDisableOrders();
 
-	event LogRegisterToken(address token);
+	event LogRegisterToken(address erc721);
 
-	event LogEnableTokenOrders(address token);
-	event LogDisableTokenOrders(address token);
+	event LogEnableTokenOrders(address erc721);
+	event LogDisableTokenOrders(address erc721);
 
-	event LogCancel(address token, uint tokenIds);
-	event LogCancelMany(address token, uint[] tokenIds);
+	event LogCancel(address erc721, uint tokenId);
+	event LogCancelMany(address erc721, uint[] tokenIds);
 
-	event LogBuy(address token, uint tokenId, address buyer);
-	event LogBuyMany(address token, uint[] tokenIds, address buyer);
+	event LogBuy(address erc721, uint tokenId, address buyer);
+	event LogBuyMany(address erc721, uint[] tokenIds, address buyer);
 
-	/////////////////////////////////////// VARIABLES ///////////////////////////////////////
+	//------------------------------------- VARIABLES ----------------------------------------
 	address public MARKET_FEE_COLLECTOR;
 	bool public ORDERS_ENABLED = true;
 	uint public marketFeeNum = 1;
 	uint public marketFeeDen = 100;
-	mapping(address => TokenContract) tokenContracts;
+	mapping(address => TokenFlags) tokenFlags;
 
-	/////////////////////////////////////// MODIFIERS ///////////////////////////////////////
+	//------------------------------------- MODIFIERS ----------------------------------------
 	modifier whenOrdersEnabled() {
-		require(ORDERS_ENABLED, "Orders must be enabled");
+		require(
+			ORDERS_ENABLED,
+			"Orders must be enabled"
+		);
+
 		_;
 	}
 
 	modifier whenOrdersDisabled() {
-		require(!ORDERS_ENABLED, "Orders must be disabled");
+		require(
+			!ORDERS_ENABLED,
+			"Orders must be disabled"
+		);
+
 		_;
 	}
 
@@ -60,7 +66,36 @@ contract MarketUniqxBase is Pausable, ReentrancyGuard, HasNoTokens, HasNoContrac
 		_;
 	}
 
-	/////////////////////////////////////// PUBLIC //////////////////////////////////////////
+	modifier whenErc721RegisteredAndEnabled(address erc721) {
+		TokenFlags storage flags = tokenFlags[erc721];
+		require(
+			flags.registered,
+			"Token must be registered"
+		);
+
+		require(
+			flags.ordersEnabled,
+			"Orders must be enabled for this erc721"
+		);
+
+		_;
+	}
+
+	modifier whenErc721Registered(address erc721) {
+		TokenFlags storage flags = tokenFlags[erc721];
+		require(
+			flags.registered,
+			"Token must be registered"
+		);
+
+		_;
+	}
+
+	// @dev Disallows direct send by setting a default function without the `payable` flag.
+	function() external {}
+
+	//------------------------------------- PUBLIC ------------------------------------------
+
 	function setMarketFee(uint _marketFeeNum, uint _marketFeeDen)
 		onlyOwner
 		public {
@@ -94,68 +129,73 @@ contract MarketUniqxBase is Pausable, ReentrancyGuard, HasNoTokens, HasNoContrac
 		emit LogDisableOrders();
 	}
 
-	function registerToken(address token)
+	function registerToken(address erc721)
 		onlyOwner
 		public {
 
-		require(!tokenContracts[token].registered, "Token should not be registered already");
+		require(
+			!tokenFlags[erc721].registered,
+			"Token should not be registered already"
+		);
 
-		TokenContract memory tokenContract = TokenContract({
+		TokenFlags memory flags = TokenFlags({
 			registered: true,
 			ordersEnabled: true
 		});
 
-		tokenContracts[token] = tokenContract;
-		emit LogRegisterToken(token);
+		tokenFlags[erc721] = flags;
+		emit LogRegisterToken(erc721);
 	}
 
-	function getTokenContractStatus(address token)
+	function getTokenFlags(address erc721)
 		public
 		view
 		returns(bool registered, bool ordersEnabled) {
 
-		TokenContract storage tokenContract = tokenContracts[token];
-		registered = tokenContract.registered;
-		ordersEnabled = tokenContract.ordersEnabled;
+		TokenFlags storage flags = tokenFlags[erc721];
+		registered = flags.registered;
+		ordersEnabled = flags.ordersEnabled;
 	}
 
-	function enableTokenOrders(address token)
+	function enableTokenOrders(address erc721)
+		whenErc721Registered(erc721)
 		onlyOwner
 		public {
 
-		TokenContract storage tokenContract = tokenContracts[token];
+		TokenFlags storage flags = tokenFlags[erc721];
+		require(
+			!flags.ordersEnabled,
+			"Orders must be disabled for this erc721"
+		);
 
-		require(tokenContract.registered, "Token must be registered");
-		require(!tokenContract.ordersEnabled, "Orders must be disabled for this token");
-		tokenContract.ordersEnabled = true;
-
-		emit LogEnableTokenOrders(token);
+		flags.ordersEnabled = true;
+		emit LogEnableTokenOrders(erc721);
 	}
 
-	function disableTokenOrders(address token)
+	function disableTokenOrders(address erc721)
+		whenErc721Registered(erc721)
 		onlyOwner
 		public {
 
-		TokenContract storage tokenContract = tokenContracts[token];
+		TokenFlags storage flags = tokenFlags[erc721];
+		require(
+			flags.ordersEnabled,
+			"Orders must be enabled for this erc721"
+		);
 
-		require(tokenContract.registered, "Token must be registered");
-		require(tokenContract.ordersEnabled, "Orders must be enabled for this token");
-		tokenContract.ordersEnabled = false;
-
-		emit LogDisableTokenOrders(token);
+		flags.ordersEnabled = false;
+		emit LogDisableTokenOrders(erc721);
 	}
 
-	/////////////////////////////////////// INTERNAL ////////////////////////////////////////
+	//------------------------------------- INTERNAL ------------------------------------------
 
-	function isSpenderApproved(address spender, address token, uint256 tokenId)
+	function isSpenderApproved(address spender, address erc721, uint256 tokenId)
+		whenErc721Registered(erc721)
 		internal
 		view
 		returns (bool) {
 
-		TokenContract storage tokenContract = tokenContracts[token];
-		require(tokenContract.registered, "Token must be registered");
-
-		ERC721Token tokenInstance = ERC721Token(token);
+		ERC721Token tokenInstance = ERC721Token(erc721);
 		address owner = tokenInstance.ownerOf(tokenId);
 
 		return (

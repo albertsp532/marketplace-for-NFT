@@ -1,0 +1,174 @@
+import {
+	accounts, assert, should, BigNumber, Bluebird, parseAdaptMarketEvent, OrderStatus
+} from '../common/common';
+import ether from '../helpers/ether';
+import expectEvent from '../helpers/expectEvent';
+import EVMRevert from 'openzeppelin-solidity/test/helpers/EVMRevert';
+import latestTime from '../helpers/latestTime';
+import { duration, increaseTimeTo } from 'openzeppelin-solidity/test/helpers/increaseTime';
+import * as abiDecoder from 'abi-decoder';
+
+const MarketAdapt = artifacts.require('MarketAdapt');
+const TokenErc721 = artifacts.require('AdaptCollectibles');
+
+contract('Adapt Market - test logging', function (rpc_accounts) {
+
+	let ac = accounts(rpc_accounts);
+	let adapt, market;
+
+	let tokensCount = 10;
+	let tokens = [];
+	let prices = [];
+	let reservations = [];
+
+	let pGetBalance = Bluebird.promisify(web3.eth.getBalance);
+	let pSendTransaction = Bluebird.promisify(web3.eth.sendTransaction);
+
+	it('should be able to deploy the smart contracts', async () => {
+
+		adapt = await TokenErc721.new(
+			ac.ADAPT_OWNER,
+			ac.ADAPT_ADMIN,
+			{ from: ac.OPERATOR }
+		).should.be.fulfilled;
+
+		console.log("ADAPT successfully deployed at address " + adapt.address);
+
+		market = await MarketAdapt.new(
+			ac.MARKET_ADMIN_MSIG,
+			ac.MARKET_FEES_MSIG,
+			adapt.address,
+			{ from: ac.OPERATOR }
+		).should.be.fulfilled;
+
+		console.log("UNIQX successfully deployed at address " + market.address);
+	});
+
+	it('should be able to mint some tokens in ADAPT', async () => {
+
+		await adapt.massMint(
+			ac.ADAPT_ADMIN,
+			'0xabcd',
+			1,
+			tokensCount,
+			{ from: ac.ADAPT_ADMIN }
+		).should.be.fulfilled;
+
+		let balance = await adapt.balanceOf(ac.ADAPT_ADMIN);
+		console.log(ac.ADAPT_ADMIN, 'balance= ', balance.toString(10));
+
+	});
+
+	it('should allow the market to escrow the adapt tokens', async() => {
+		// approve market to transfer all erc721 tokens hold by admin
+		await adapt.setApprovalForAll(
+			market.address,
+			true,
+			{
+				from: ac.ADAPT_ADMIN,
+			}
+		).should.be.fulfilled;
+	});
+
+
+	it('should be able to list the tokens in the adapt market', async () => {
+
+		for (let i = 0; i < tokensCount; i++) {
+			tokens[i] = await adapt.tokenByIndex(i);
+			prices[i] = ether(1);
+			reservations[i] = '0x0000000000000000000000000000000000000000';
+		}
+		reservations[3] = ac.BUYER2;
+		reservations[4] = ac.BUYER2;
+
+		const { logs }  = await market.createMany(
+			tokens,
+			prices,
+			reservations,
+			{ from: ac.ADAPT_ADMIN }
+		).should.be.fulfilled;
+
+		let ownerToken1 = await adapt.ownerOf(tokens[0]);
+		assert.equal(ownerToken1, market.address, 'MARKET should tmp own the token');
+
+		logs.length.should.be.equal(1);
+		await expectEvent.inLog(logs[0], 'LogCreateMany', {
+			tokenIds: tokens,
+			buyPrices: prices,
+			reservations: reservations,
+			owners: Array(...Array(tokens.length)).map(() =>  ac.ADAPT_ADMIN),
+			seller: ac.ADAPT_ADMIN,
+		});
+	});
+
+	it('should be able to cancel 2 tokens', async () => {
+		await market.cancelMany(
+			[tokens[0], tokens[1]],
+			{ from: ac.ADAPT_ADMIN }
+		).should.be.fulfilled;
+	});
+
+	it('BUYER1 should be able to donate for a token', async () => {
+		await market.buy(
+			tokens[2],
+			{ from: ac.BUYER1, value: ether(3)}
+		).should.be.fulfilled;
+
+		const owner = await adapt.ownerOf(tokens[2]);
+		assert.equal(owner, ac.BUYER1, 'BUYER1 should tmp own tokens[2]');
+	});
+
+	it('BUYER1 should not be able to donate for a token reserved for BUYER2', async () => {
+		await market.buy(
+			tokens[3],
+			{ from: ac.BUYER1, value: ether(3)}
+		).should.be.rejectedWith(EVMRevert);
+	});
+
+	it('BUYER2 should be able to donate for a token reserved for him', async () => {
+		await market.buy(
+			tokens[3],
+			{ from: ac.BUYER2, value: ether(3)}
+		).should.be.fulfilled;
+	});
+
+	it('BUYER3 should be able to donate for a token reserved for BUYER2 after the reservation expires', async () => {
+		const sevenDaysLater = latestTime() + duration.days(7);
+		await increaseTimeTo(sevenDaysLater + duration.minutes(1));
+
+		await market.buy(
+			tokens[4],
+			{ from: ac.BUYER3, value: ether(3)}
+		).should.be.fulfilled;
+	});
+
+	it('BUYER1 should be able buy 5 tokens by paying the exact amount', async () => {
+		await market.buyMany(
+			tokens.slice(5),
+			{ from: ac.BUYER1, value: ether(5)}
+		).should.be.fulfilled;
+	});
+
+	it('BUYER1 should not be able to list a token that was sold already', async () => {
+
+		// approve market to transfer all erc721 tokens hold by buyer1
+		await adapt.setApprovalForAll(
+			market.address,
+			true,
+			{
+				from: ac.BUYER1,
+			}
+		).should.be.fulfilled;
+
+		const status = await market.getOrderStatus(tokens[2]);
+		assert.equal(status, OrderStatus.Unknown, "Order should not be listed");
+
+		await market.createMany(
+			[tokens[2]],
+			[prices[2]],
+			[reservations[2]],
+			{ from: ac.BUYER1 }
+		).should.be.rejectedWith(EVMRevert);
+	});
+});
+
