@@ -15,12 +15,12 @@ contract MarketUniqxAuction is MarketUniqxBase {
 
 	//------------------------------------- TYPES -------------------------------------------
 	struct OrderInfo {
-		address owner; 		// the user who owns the token sold via this order
-		uint128 buyPrice;		// holds the 'buy it now' price
-		address buyer;		   // holds the highest bidder
+		address owner;          // the user who owns the token sold via this order
+		address buyer;          // holds the highest bidder
+		uint128 buyPrice;       // holds the 'buy it now' price
 		uint128 startPrice; 	// holds the start price of an auction
-		uint64 endTime;		// holds the time when the auction ends
 		uint128 highestBid; 	// holds the highest bid at any given time
+		uint64 endTime;		    // holds the time when the auction ends
 	}
 
 	//------------------------------------- EVENTS ------------------------------------------

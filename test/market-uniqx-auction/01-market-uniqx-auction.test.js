@@ -275,7 +275,6 @@ contract('testing allow/disallow orders - ', function (rpc_accounts) {
 
 	it('should not be able to disallow orders globally if already disallowed', async () => {
 		await market.disableOrders(
-			token1Erc721.address,
 			{ from: ac.MARKET_ADMIN_MSIG  }
 		).should.be.rejectedWith(EVMRevert);
 	});
